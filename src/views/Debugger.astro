@@ -1,0 +1,304 @@
+---
+import Base from '../layouts/Base.astro';
+import ProjectNav from '../components/ProjectNav.astro';
+import { routes } from '../data/nav';
+
+const t = {
+  title: 'Token debugger',
+  description: 'Paste a JWT or a SAML message and see what it contains, who issued it and whether it is still valid. It is analysed in your browser.',
+  lead: 'Paste a JWT or a SAML message and see what it says: who issued it, who it is for and whether it is still valid. It is analysed in your browser and nothing is sent anywhere.',
+  back: 'All projects',
+  label: 'Token, SAML message or a URL that contains one',
+  sampleJwt: 'Sample JWT',
+  sampleSaml: 'Sample SAML',
+  clear: 'Clear',
+  summary: 'Summary',
+  claims: 'Data it contains',
+  raw: 'Full content',
+  client: {
+    hint: 'Paste something above or try a sample.',
+    unknown: 'This text is not recognised as a JWT or a SAML message.',
+    jwt: {
+      valid: 'Valid token. It expires {when}.',
+      expired: 'Expired token. It expired {when}.',
+      notYetValid: 'The token is not valid yet. It starts {when}.',
+      noExpiry: 'Token with no expiry date.',
+    },
+    saml: {
+      success: 'Successful sign-in.',
+      failure: 'The identity provider returned an error: {status}.',
+      request: 'Sign-in request.',
+      other: 'SAML message.',
+      valid: ' It expires {when}.',
+      expired: ' It expired {when}.',
+      notYetValid: ' It is not valid yet.',
+    },
+    fields: {
+      kind: 'Type',
+      issuer: 'Issued by',
+      subject: 'Identifies',
+      audience: 'For application',
+      issuedAt: 'Issued',
+      notBefore: 'Valid from',
+      expiresAt: 'Expires',
+      algorithm: 'Signature algorithm',
+      signature: 'Signature',
+      destination: 'Destination',
+      acsUrl: 'Where the response is sent',
+      status: 'Status',
+      encrypted: 'Encrypted',
+      encoding: 'Received as',
+    },
+    values: {
+      jwt: 'JWT',
+      kinds: {
+        Response: 'SAML response',
+        AuthnRequest: 'SAML sign-in request',
+        LogoutRequest: 'SAML sign-out request',
+        LogoutResponse: 'SAML sign-out response',
+        Assertion: 'SAML assertion',
+      },
+      signaturePresent: 'Signed (not checked here)',
+      signedMessage: 'Signed message (not checked here)',
+      signedAssertion: 'Signed assertion (not checked here)',
+      signedBoth: 'Signed message and assertion (not checked here)',
+      unsigned: 'Not signed',
+      encrypted: 'The assertion is encrypted and cannot be read without the key',
+      encodings: { xml: 'XML', base64: 'Base64', deflate: 'Compressed and Base64' },
+    },
+  },
+};
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <p><a href={routes.projects}>{t.back}</a></p>
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+  </header>
+
+  <div class="debugger">
+    <label for="db-input">{t.label}</label>
+    <textarea id="db-input" data-db="input" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+    <div class="debugger-buttons">
+      <button class="btn quiet" type="button" data-db="sample-jwt">{t.sampleJwt}</button>
+      <button class="btn quiet" type="button" data-db="sample-saml">{t.sampleSaml}</button>
+      <button class="btn quiet" type="button" data-db="clear">{t.clear}</button>
+    </div>
+
+    <p class="status" data-db="verdict" role="status">{t.client.hint}</p>
+
+    <div data-db="output" hidden>
+      <h2>{t.summary}</h2>
+      <dl class="facts" data-db="summary"></dl>
+      <div data-db="claims-block">
+        <h2>{t.claims}</h2>
+        <dl class="facts" data-db="claims"></dl>
+      </div>
+      <details class="tech">
+        <summary>{t.raw}</summary>
+        <pre data-db="raw"></pre>
+      </details>
+    </div>
+  </div>
+
+  <script type="application/json" id="db-text" set:html={JSON.stringify(t.client)} />
+  <ProjectNav current="token-debugger" demos />
+</Base>
+
+<script>
+  import { detect, type Detected } from '../lib/debugger/detect';
+  import { decodeJwt, inspectJwt } from '../lib/debugger/jwt';
+  import { formatXml, parseSaml, samlValidity } from '../lib/debugger/saml';
+  import { toBase64Url } from '../lib/webauthn/bytes';
+
+  type State = 'ok' | 'error' | '';
+  type Row = [label: string, value: string | undefined];
+
+  const text = JSON.parse(document.getElementById('db-text')!.textContent!);
+  const el = <T extends HTMLElement>(name: string) => document.querySelector<T>(`[data-db="${name}"]`)!;
+
+  const input = el<HTMLTextAreaElement>('input');
+  const verdict = el('verdict');
+  const output = el('output');
+  const summaryList = el('summary');
+  const claimsBlock = el('claims-block');
+  const claimsList = el('claims');
+  const raw = el('raw');
+
+  const lang = document.documentElement.lang;
+  const dateFormat = new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' });
+  const relativeFormat = new Intl.RelativeTimeFormat(lang, { numeric: 'always' });
+
+  function relative(seconds: number) {
+    const diff = seconds - Date.now() / 1000;
+    const size = Math.abs(diff);
+    if (size < 90) return relativeFormat.format(Math.round(diff), 'second');
+    if (size < 5400) return relativeFormat.format(Math.round(diff / 60), 'minute');
+    if (size < 129600) return relativeFormat.format(Math.round(diff / 3600), 'hour');
+    return relativeFormat.format(Math.round(diff / 86400), 'day');
+  }
+
+  const moment = (seconds: number | undefined) =>
+    seconds === undefined || Number.isNaN(seconds) ? undefined : `${dateFormat.format(seconds * 1000)} (${relative(seconds)})`;
+  const isoMoment = (iso: string | undefined) => (iso ? moment(Date.parse(iso) / 1000) : undefined);
+  const fill = (template: string, values: Record<string, string>) =>
+    template.replace(/\{(\w+)\}/g, (_, key: string) => values[key] ?? '');
+
+  function setVerdict(message: string, state: State) {
+    verdict.textContent = message;
+    verdict.dataset.state = state;
+  }
+
+  function renderRows(list: HTMLElement, rows: Row[]) {
+    list.replaceChildren();
+    for (const [label, value] of rows) {
+      if (!value) continue;
+      const group = document.createElement('div');
+      const term = document.createElement('dt');
+      const detail = document.createElement('dd');
+      term.textContent = label;
+      detail.textContent = value;
+      group.append(term, detail);
+      list.append(group);
+    }
+  }
+
+  function show(summary: Row[], claims: Row[], content: string) {
+    renderRows(summaryList, summary);
+    renderRows(claimsList, claims);
+    claimsBlock.hidden = claimsList.childElementCount === 0;
+    raw.textContent = content;
+    output.hidden = false;
+  }
+
+  function showJwt(token: string) {
+    const jwt = decodeJwt(token);
+    const info = inspectJwt(jwt, Date.now() / 1000);
+    const when = relative(info.status === 'notYetValid' ? info.notBefore! : (info.expiresAt ?? 0));
+    setVerdict(fill(text.jwt[info.status], { when }), info.status === 'valid' || info.status === 'noExpiry' ? 'ok' : 'error');
+
+    const standard = ['iss', 'sub', 'aud', 'iat', 'nbf', 'exp'];
+    show(
+      [
+        [text.fields.kind, text.values.jwt],
+        [text.fields.issuer, info.issuer],
+        [text.fields.subject, info.subject],
+        [text.fields.audience, info.audience.join(', ')],
+        [text.fields.issuedAt, moment(info.issuedAt)],
+        [text.fields.notBefore, moment(info.notBefore)],
+        [text.fields.expiresAt, moment(info.expiresAt)],
+        [text.fields.algorithm, info.algorithm],
+        [text.fields.signature, info.unsigned ? text.values.unsigned : text.values.signaturePresent],
+      ],
+      Object.entries(jwt.payload)
+        .filter(([name]) => !standard.includes(name))
+        .map(([name, value]): Row => [name, typeof value === 'string' ? value : JSON.stringify(value)]),
+      `${JSON.stringify(jwt.header, null, 2)}\n\n${JSON.stringify(jwt.payload, null, 2)}`,
+    );
+  }
+
+  function showSaml(found: Extract<Detected, { kind: 'saml' }>) {
+    const saml = parseSaml(found.xml);
+    const validity = samlValidity(saml, Date.now());
+    const failed = saml.status !== undefined && saml.status !== 'Success';
+
+    let message = text.saml.other;
+    if (failed) message = fill(text.saml.failure, { status: saml.status! });
+    else if (saml.type === 'Response') message = text.saml.success;
+    else if (saml.type === 'AuthnRequest') message = text.saml.request;
+    if (!failed && (validity === 'notYetValid' || (validity !== 'noWindow' && saml.notOnOrAfter))) {
+      message += fill(text.saml[validity], { when: relative(Date.parse(saml.notOnOrAfter ?? '') / 1000) });
+    }
+    setVerdict(message, failed || validity === 'expired' || validity === 'notYetValid' ? 'error' : 'ok');
+
+    const { message: signedMessage, assertion: signedAssertion } = saml.signed;
+    const signature =
+      signedMessage && signedAssertion
+        ? text.values.signedBoth
+        : signedMessage
+          ? text.values.signedMessage
+          : signedAssertion
+            ? text.values.signedAssertion
+            : text.values.unsigned;
+
+    show(
+      [
+        [text.fields.kind, text.values.kinds[saml.type]],
+        [text.fields.status, saml.status],
+        [text.fields.issuer, saml.issuer],
+        [text.fields.subject, saml.nameId],
+        [text.fields.audience, saml.audiences.join(', ')],
+        [text.fields.destination, saml.destination],
+        [text.fields.acsUrl, saml.acsUrl],
+        [text.fields.issuedAt, isoMoment(saml.issueInstant)],
+        [text.fields.notBefore, isoMoment(saml.notBefore)],
+        [text.fields.expiresAt, isoMoment(saml.notOnOrAfter)],
+        [text.fields.signature, signature],
+        [text.fields.encrypted, saml.encrypted ? text.values.encrypted : undefined],
+        [text.fields.encoding, text.values.encodings[found.encoding]],
+      ],
+      saml.attributes.map((item): Row => [item.name, item.values.join(', ')]),
+      formatXml(found.xml),
+    );
+  }
+
+  let run = 0;
+  async function analyse() {
+    const current = ++run;
+    const value = input.value;
+    if (!value.trim()) {
+      output.hidden = true;
+      setVerdict(text.hint, '');
+      return;
+    }
+    const found = await detect(value);
+    if (current !== run) return;
+    try {
+      if (found.kind === 'jwt') return showJwt(found.token);
+      if (found.kind === 'saml') return showSaml(found);
+    } catch {}
+    output.hidden = true;
+    setVerdict(text.unknown, 'error');
+  }
+
+  function sampleJwt() {
+    const now = Math.floor(Date.now() / 1000);
+    const part = (value: object) => toBase64Url(new TextEncoder().encode(JSON.stringify(value)));
+    const header = { alg: 'ES256', typ: 'JWT', kid: 'demo-1' };
+    const payload = {
+      iss: 'https://login.example.com',
+      sub: 'ana.garcia',
+      aud: 'my-app',
+      iat: now,
+      exp: now + 3600,
+      name: 'Ana García',
+      email: 'ana@example.com',
+      roles: ['user', 'editor'],
+    };
+    return `${part(header)}.${part(payload)}.${toBase64Url(crypto.getRandomValues(new Uint8Array(64)))}`;
+  }
+
+  function sampleSaml() {
+    const iso = (offset: number) => new Date(Date.now() + offset * 1000).toISOString().replace(/\.\d+Z$/, 'Z');
+    const xml = `<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_resp1" Version="2.0" IssueInstant="${iso(0)}" Destination="https://app.example.com/saml/acs"><saml:Issuer>https://login.example.com</saml:Issuer><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status><saml:Assertion ID="_assert1" Version="2.0" IssueInstant="${iso(0)}"><saml:Issuer>https://login.example.com</saml:Issuer><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignatureValue>ZGVtbw==</ds:SignatureValue></ds:Signature><saml:Subject><saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">ana@example.com</saml:NameID></saml:Subject><saml:Conditions NotBefore="${iso(-60)}" NotOnOrAfter="${iso(300)}"><saml:AudienceRestriction><saml:Audience>https://app.example.com</saml:Audience></saml:AudienceRestriction></saml:Conditions><saml:AttributeStatement><saml:Attribute Name="email"><saml:AttributeValue>ana@example.com</saml:AttributeValue></saml:Attribute><saml:Attribute Name="name"><saml:AttributeValue>Ana García</saml:AttributeValue></saml:Attribute><saml:Attribute Name="roles"><saml:AttributeValue>user</saml:AttributeValue><saml:AttributeValue>editor</saml:AttributeValue></saml:Attribute></saml:AttributeStatement></saml:Assertion></samlp:Response>`;
+    return btoa(String.fromCharCode(...new TextEncoder().encode(xml)));
+  }
+
+  function load(value: string) {
+    input.value = value;
+    analyse();
+  }
+
+  let timer = 0;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(analyse, 150);
+  });
+  el('sample-jwt').addEventListener('click', () => load(sampleJwt()));
+  el('sample-saml').addEventListener('click', () => load(sampleSaml()));
+  el('clear').addEventListener('click', () => {
+    load('');
+    input.focus();
+  });
+</script>

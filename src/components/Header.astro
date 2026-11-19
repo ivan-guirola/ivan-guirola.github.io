@@ -1,0 +1,50 @@
+---
+import { routes, ui, type PageKey } from '../data/nav';
+import { site } from '../data/site';
+
+interface Props {
+  page: PageKey;
+}
+const { page } = Astro.props;
+const t = ui;
+const pages = Object.keys(routes) as PageKey[];
+---
+
+<header class="site-header">
+  <div class="wrap bar">
+    <a class="brand" href={routes.home}>{site.shortName}</a>
+    <nav class="site-nav" aria-label={t.mainNav}>
+      <ul>
+        {
+          pages.map((key) => (
+            <li>
+              <a href={routes[key]} aria-current={key === page ? 'page' : undefined}>
+                {t.nav[key]}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+    <div class="tools">
+      <button class="tool" type="button" data-theme-toggle aria-label={t.theme}>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"></circle>
+          <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<script>
+  document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
+    const root = document.documentElement;
+    const isDark = root.dataset.theme !== 'light';
+    const next = isDark ? 'light' : 'dark';
+    root.dataset.theme = next;
+    try {
+      localStorage.setItem('theme', next);
+    } catch {}
+  });
+</script>

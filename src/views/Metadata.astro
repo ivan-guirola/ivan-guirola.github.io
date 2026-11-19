@@ -1,0 +1,476 @@
+---
+import Base from '../layouts/Base.astro';
+import ProjectNav from '../components/ProjectNav.astro';
+import { routes } from '../data/nav';
+
+const t = {
+  title: 'Federation metadata checker',
+  description:
+    'Paste SAML metadata or an OpenID Connect discovery document, or give its address, and see its sign-in addresses, its keys and when its certificates expire.',
+  lead: 'Before two systems can trust each other they exchange a small file that says where to send people and which keys to trust. Paste that file here, or give its address, to see what it says and whether its certificates are about to expire.',
+  privacy: 'What you paste is analysed in your browser and sent nowhere. If you give an address, your browser requests it directly.',
+  back: 'All projects',
+  label: 'SAML metadata, OpenID Connect discovery document or its address',
+  sampleSaml: 'Sample SAML metadata',
+  sampleOidc: 'Sample discovery document',
+  clear: 'Clear',
+  raw: 'Full content',
+  client: {
+    hint: 'Paste something above or try a sample.',
+    unknown: 'This is not recognised as SAML metadata or as an OpenID Connect discovery document.',
+    loading: 'Reading the address…',
+    unreachable:
+      'This address could not be read from the browser. The server may not allow it: open it yourself and paste its content here.',
+    more: 'Only the first {shown} of {total} entities are shown.',
+    verdict: {
+      ok: '{what}. Nothing needs attention.',
+      expired: '{what}. {count} certificate(s) expired.',
+      soon: '{what}. {count} certificate(s) expire within 30 days.',
+      findings: '{what}. {count} thing(s) to check.',
+    },
+    what: {
+      idp: 'Identity provider metadata',
+      sp: 'Application metadata',
+      many: 'Metadata for {count} entities',
+      oidc: 'OpenID Connect provider',
+      jwks: 'Key set',
+    },
+    headings: {
+      idp: 'Identity provider',
+      sp: 'Application (service provider)',
+      oidc: 'OpenID Connect provider',
+      addresses: 'Addresses',
+      keys: 'Keys and certificates',
+      supports: 'What it supports',
+      findings: 'To check',
+    },
+    fields: {
+      id: 'Identifier',
+      validUntil: 'Metadata valid until',
+      nameId: 'User identifier formats',
+      wantsRequestsSigned: 'Requires signed sign-in requests',
+      signsRequests: 'Signs its sign-in requests',
+      wantsAssertionsSigned: 'Requires signed assertions',
+      scopes: 'Scopes',
+      grantTypes: 'Grant types',
+      responseTypes: 'Response types',
+      signingAlgorithms: 'ID token signature',
+      pkceMethods: 'PKCE',
+      clientAuthMethods: 'Client authentication',
+    },
+    services: {
+      SingleSignOnService: 'Sign-in',
+      SingleLogoutService: 'Sign-out',
+      AssertionConsumerService: 'Where responses are sent',
+      ArtifactResolutionService: 'Artifact resolution',
+      NameIDMappingService: 'Identifier mapping',
+      ManageNameIDService: 'Identifier management',
+      authorization_endpoint: 'Sign-in',
+      token_endpoint: 'Tokens',
+      userinfo_endpoint: 'User information',
+      jwks_uri: 'Public keys',
+      end_session_endpoint: 'Sign-out',
+      introspection_endpoint: 'Token check',
+      revocation_endpoint: 'Token revocation',
+      registration_endpoint: 'Client registration',
+      device_authorization_endpoint: 'Sign-in from another device',
+      pushed_authorization_request_endpoint: 'Pushed sign-in requests',
+    },
+    uses: { signing: 'Signing', encryption: 'Encryption', both: 'Signing and encryption', sig: 'Signing', enc: 'Encryption' },
+    status: {
+      valid: 'Valid until {date} ({when})',
+      expiringSoon: 'Expires {when}, on {date}',
+      expired: 'Expired {when}, on {date}',
+      notYetValid: 'Not valid until {date}',
+    },
+    key: {
+      unreadable: 'A certificate that cannot be read',
+      noCertificate: 'Key without a certificate',
+      selfSigned: 'self-signed',
+      issuedBy: 'issued by {issuer}',
+      fingerprint: 'SHA-256 fingerprint',
+      keyId: 'Key ID',
+      default: 'default',
+      none: 'No keys published.',
+      pasted: 'Keys are read only when you give the address instead of pasting the document.',
+      unreachable: 'The keys could not be read from the browser.',
+    },
+    findings: {
+      issuerMismatch: 'The issuer it declares ({detail}) does not match the address it was read from.',
+      insecureEndpoint: 'The address “{detail}” does not use HTTPS.',
+      validUntil: 'The metadata itself expired {when}.',
+    },
+    yes: 'Yes',
+    no: 'No',
+  },
+};
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <p><a href={routes.projects}>{t.back}</a></p>
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+  </header>
+
+  <div class="debugger">
+    <label for="md-input">{t.label}</label>
+    <textarea id="md-input" data-md="input" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+    <div class="debugger-buttons">
+      <button class="btn quiet" type="button" data-md="sample-saml">{t.sampleSaml}</button>
+      <button class="btn quiet" type="button" data-md="sample-oidc">{t.sampleOidc}</button>
+      <button class="btn quiet" type="button" data-md="clear">{t.clear}</button>
+    </div>
+    <p class="fine">{t.privacy}</p>
+
+    <p class="status" data-md="verdict" role="status">{t.client.hint}</p>
+
+    <div data-md="output" hidden>
+      <div data-md="blocks"></div>
+      <details class="tech">
+        <summary>{t.raw}</summary>
+        <pre data-md="raw"></pre>
+      </details>
+    </div>
+  </div>
+
+  <script type="application/json" id="md-text" set:html={JSON.stringify(t.client)} />
+  <ProjectNav current="federation-metadata-checker" demos />
+</Base>
+
+<script>
+  import { formatXml } from '../lib/debugger/saml';
+  import { certificateStatus, fingerprint, type Certificate } from '../lib/metadata/certificate';
+  import { detectInput } from '../lib/metadata/detect';
+  import { checkDiscovery, discoveryUrl, parseDiscovery, parseJwks, type JwksKey } from '../lib/metadata/oidc';
+  import { EC_CERT, RSA_CERT } from '../lib/metadata/samples';
+  import { parseSamlMetadata, type Entity, type Role } from '../lib/metadata/saml';
+
+  type State = 'ok' | 'warn' | 'error' | '';
+  type Row = [label: string, value: string | undefined];
+  interface KeyRow {
+    title: string;
+    use?: string;
+    type?: string;
+    certificate?: Certificate;
+    source?: string;
+    keyId?: string;
+  }
+  interface Tally {
+    expired: number;
+    soon: number;
+    findings: number;
+  }
+
+  const text = JSON.parse(document.getElementById('md-text')!.textContent!);
+  const el = <T extends HTMLElement>(name: string) => document.querySelector<T>(`[data-md="${name}"]`)!;
+  const make = <K extends keyof HTMLElementTagNameMap>(tag: K, content?: string, className?: string) => {
+    const node = document.createElement(tag);
+    if (content !== undefined) node.textContent = content;
+    if (className) node.className = className;
+    return node;
+  };
+
+  const MAX_ENTITIES = 10;
+  const input = el<HTMLTextAreaElement>('input');
+  const verdict = el('verdict');
+  const output = el('output');
+  const blocks = el('blocks');
+  const raw = el('raw');
+
+  const lang = document.documentElement.lang;
+  const dateFormat = new Intl.DateTimeFormat(lang, { dateStyle: 'medium' });
+  const relativeFormat = new Intl.RelativeTimeFormat(lang, { numeric: 'always' });
+  const fill = (template: string, values: Record<string, string | number>) =>
+    template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? ''));
+
+  function relative(time: number) {
+    const days = (time - Date.now()) / 86_400_000;
+    const size = Math.abs(days);
+    if (size < 1) return relativeFormat.format(Math.round(days * 24), 'hour');
+    if (size < 60) return relativeFormat.format(Math.round(days), 'day');
+    if (size < 730) return relativeFormat.format(Math.round(days / 30.44), 'month');
+    return relativeFormat.format(Math.round(days / 365.25), 'year');
+  }
+
+  function setVerdict(message: string, state: State) {
+    verdict.textContent = message;
+    verdict.dataset.state = state;
+  }
+
+  function facts(rows: Row[]) {
+    const list = make('dl', undefined, 'facts');
+    for (const [label, value] of rows) {
+      if (!value) continue;
+      const group = make('div');
+      group.append(make('dt', label), make('dd', value));
+      list.append(group);
+    }
+    return list;
+  }
+
+  const yesNo = (value: boolean | undefined) => (value === undefined ? undefined : value ? text.yes : text.no);
+
+  function keyList(keys: KeyRow[], tally: Tally, empty: string = text.key.none) {
+    if (keys.length === 0) return make('p', empty, 'fine');
+    const list = make('ul', undefined, 'keys');
+    for (const key of keys) {
+      const item = make('li');
+      const head = make('div', undefined, 'key-head');
+      head.append(make('strong', key.title));
+      const about = [key.use, key.certificate?.key ?? key.type].filter(Boolean).join(', ');
+      if (about) head.append(make('span', about));
+      item.append(head);
+
+      if (key.certificate) {
+        const certificate = key.certificate;
+        const status = certificateStatus(certificate, Date.now());
+        if (status === 'expired' || status === 'notYetValid') tally.expired += 1;
+        if (status === 'expiringSoon') tally.soon += 1;
+        item.dataset.state = status;
+        const date = dateFormat.format(status === 'notYetValid' ? certificate.notBefore : certificate.notAfter);
+        item.append(make('p', fill(text.status[status], { date, when: relative(certificate.notAfter) }), 'key-status'));
+
+        const more = make('details', undefined, 'tech');
+        const origin = certificate.selfSigned
+          ? text.key.selfSigned
+          : fill(text.key.issuedBy, { issuer: certificate.issuer });
+        const print = make('code');
+        more.append(make('summary', origin), make('p', `${text.key.fingerprint}: `), print);
+        if (key.source) void fingerprint(key.source).then((value) => (print.textContent = value));
+        item.append(more);
+      }
+      if (key.keyId) item.append(make('p', `${text.key.keyId}: ${key.keyId}`, 'fine'));
+      list.append(item);
+    }
+    return list;
+  }
+
+  function section(title: string, subtitle?: string) {
+    const block = make('section', undefined, 'md-block');
+    block.append(make('h2', title));
+    if (subtitle) block.append(make('p', subtitle, 'md-id'));
+    return block;
+  }
+
+  function findingList(messages: string[], tally: Tally) {
+    tally.findings += messages.length;
+    const list = make('ul', undefined, 'findings');
+    list.append(...messages.map((message) => make('li', message)));
+    return list;
+  }
+
+  function renderRole(entity: Entity, role: Role, tally: Tally) {
+    const block = section(text.headings[role.kind], entity.entityId);
+    const expired = entity.validUntil && Date.parse(entity.validUntil) <= Date.now();
+    if (expired) {
+      block.append(
+        findingList([fill(text.findings.validUntil, { when: relative(Date.parse(entity.validUntil!)) })], tally),
+      );
+    }
+    block.append(
+      facts([
+        [text.fields.validUntil, entity.validUntil && dateFormat.format(Date.parse(entity.validUntil))],
+        [text.fields.wantsRequestsSigned, yesNo(role.wantsRequestsSigned)],
+        [text.fields.signsRequests, yesNo(role.signsRequests)],
+        [text.fields.wantsAssertionsSigned, yesNo(role.wantsAssertionsSigned)],
+        [text.fields.nameId, role.nameIdFormats.join(', ')],
+      ]),
+      make('h3', text.headings.addresses),
+      facts(
+        role.endpoints.map((endpoint): Row => {
+          const name = text.services[endpoint.service] ?? endpoint.service;
+          const marks = [endpoint.binding, endpoint.isDefault && text.key.default].filter(Boolean).join(', ');
+          return [`${name} (${marks})`, endpoint.location];
+        }),
+      ),
+      make('h3', text.headings.keys),
+      keyList(
+        role.keys.map((key) => ({
+          title: key.certificate?.subject || text.key.unreadable,
+          use: text.uses[key.use],
+          certificate: key.certificate,
+          source: key.source,
+        })),
+        tally,
+      ),
+    );
+    return block;
+  }
+
+  function finish(what: string, tally: Tally, content: string) {
+    if (tally.expired > 0) setVerdict(fill(text.verdict.expired, { what, count: tally.expired }), 'error');
+    else if (tally.findings > 0) setVerdict(fill(text.verdict.findings, { what, count: tally.findings }), 'error');
+    else if (tally.soon > 0) setVerdict(fill(text.verdict.soon, { what, count: tally.soon }), 'warn');
+    else setVerdict(fill(text.verdict.ok, { what }), 'ok');
+    raw.textContent = content;
+    output.hidden = false;
+  }
+
+  function showSaml(xml: string) {
+    const entities = parseSamlMetadata(xml);
+    const tally: Tally = { expired: 0, soon: 0, findings: 0 };
+    const shown = entities.slice(0, MAX_ENTITIES);
+    blocks.replaceChildren(
+      ...shown.flatMap((entity) => entity.roles.map((role) => renderRole(entity, role, tally))),
+    );
+    if (entities.length > shown.length) {
+      blocks.append(make('p', fill(text.more, { shown: shown.length, total: entities.length }), 'fine'));
+    }
+    const roles = shown.flatMap((entity) => entity.roles);
+    const what = entities.length > 1 ? fill(text.what.many, { count: entities.length }) : text.what[roles[0]?.kind ?? 'idp'];
+    finish(what, tally, formatXml(xml));
+  }
+
+  const jwksRows = (keys: JwksKey[]): KeyRow[] =>
+    keys.map((key) => ({
+      title: key.certificate?.subject || key.kid || text.key.noCertificate,
+      use: key.use && (text.uses[key.use] ?? key.use),
+      type: [key.type, key.alg].filter(Boolean).join(', '),
+      certificate: key.certificate,
+      source: key.source,
+      keyId: key.certificate ? key.kid : undefined,
+    }));
+
+  async function showOidc(json: string, source: string | undefined, signal: AbortSignal) {
+    const discovery = parseDiscovery(json);
+    const tally: Tally = { expired: 0, soon: 0, findings: 0 };
+    const block = section(text.headings.oidc, discovery.issuer);
+
+    const findings = checkDiscovery(discovery, source).map((finding) =>
+      fill(text.findings[finding.code], { detail: finding.detail }),
+    );
+    if (findings.length > 0) block.append(findingList(findings, tally));
+
+    block.append(
+      make('h3', text.headings.addresses),
+      facts(discovery.endpoints.map(({ name, url }): Row => [text.services[name] ?? name, url])),
+      make('h3', text.headings.keys),
+    );
+
+    const keysUrl = discovery.endpoints.find((endpoint) => endpoint.name === 'jwks_uri')?.url;
+    if (!source || !keysUrl) block.append(make('p', source ? text.key.none : text.key.pasted, 'fine'));
+    else {
+      try {
+        const response = await fetch(keysUrl, { signal });
+        block.append(keyList(jwksRows(parseJwks(await response.text())), tally));
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') throw error;
+        block.append(make('p', text.key.unreachable, 'fine'));
+      }
+    }
+
+    block.append(
+      make('h3', text.headings.supports),
+      facts([
+        [text.fields.grantTypes, discovery.grantTypes.join(', ')],
+        [text.fields.responseTypes, discovery.responseTypes.join(', ')],
+        [text.fields.scopes, discovery.scopes.join(', ')],
+        [text.fields.signingAlgorithms, discovery.signingAlgorithms.join(', ')],
+        [text.fields.pkceMethods, discovery.pkceMethods.join(', ')],
+        [text.fields.clientAuthMethods, discovery.clientAuthMethods.join(', ')],
+      ]),
+    );
+    blocks.replaceChildren(block);
+    finish(text.what.oidc, tally, JSON.stringify(JSON.parse(json), null, 2));
+  }
+
+  function showJwks(json: string) {
+    const tally: Tally = { expired: 0, soon: 0, findings: 0 };
+    const block = section(text.headings.keys);
+    block.append(keyList(jwksRows(parseJwks(json)), tally));
+    blocks.replaceChildren(block);
+    finish(text.what.jwks, tally, JSON.stringify(JSON.parse(json), null, 2));
+  }
+
+  async function read(url: string, signal: AbortSignal) {
+    const response = await fetch(url, { signal });
+    if (!response.ok) throw new Error(String(response.status));
+    return response.text();
+  }
+
+  async function showUrl(url: string, signal: AbortSignal) {
+    setVerdict(text.loading, '');
+    output.hidden = true;
+    for (const candidate of new Set([url, discoveryUrl(url)])) {
+      try {
+        const found = detectInput(await read(candidate, signal));
+        if (found.kind === 'saml') return showSaml(found.xml);
+        if (found.kind === 'oidc') return await showOidc(found.json, candidate, signal);
+        if (found.kind === 'jwks') return showJwks(found.json);
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') throw error;
+      }
+    }
+    setVerdict(text.unreachable, 'error');
+  }
+
+  let running: AbortController | undefined;
+
+  async function analyse() {
+    running?.abort();
+    const current = (running = new AbortController());
+    const found = detectInput(input.value);
+
+    if (!input.value.trim()) {
+      output.hidden = true;
+      setVerdict(text.hint, '');
+      return;
+    }
+    try {
+      if (found.kind === 'url') await showUrl(found.url, current.signal);
+      else if (found.kind === 'saml') showSaml(found.xml);
+      else if (found.kind === 'oidc') await showOidc(found.json, undefined, current.signal);
+      else if (found.kind === 'jwks') showJwks(found.json);
+      else throw new Error('unknown');
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') return;
+      output.hidden = true;
+      setVerdict(text.unknown, 'error');
+    }
+  }
+
+  const key = (certificate: string, use: string) =>
+    `<md:KeyDescriptor use="${use}"><ds:KeyInfo><ds:X509Data><ds:X509Certificate>${certificate}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></md:KeyDescriptor>`;
+  const BINDING = 'urn:oasis:names:tc:SAML:2.0:bindings';
+
+  const sampleSaml = () =>
+    `<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" entityID="https://idp.example.com/saml"><md:IDPSSODescriptor WantAuthnRequestsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">${key(RSA_CERT, 'signing')}${key(EC_CERT, 'encryption')}<md:SingleLogoutService Binding="${BINDING}:HTTP-Redirect" Location="https://idp.example.com/saml/logout"/><md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat><md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:persistent</md:NameIDFormat><md:SingleSignOnService Binding="${BINDING}:HTTP-Redirect" Location="https://idp.example.com/saml/login"/><md:SingleSignOnService Binding="${BINDING}:HTTP-POST" Location="https://idp.example.com/saml/login"/></md:IDPSSODescriptor></md:EntityDescriptor>`;
+
+  const sampleOidc = () =>
+    JSON.stringify(
+      {
+        issuer: 'https://login.example.com/realms/demo',
+        authorization_endpoint: 'https://login.example.com/realms/demo/protocol/openid-connect/auth',
+        token_endpoint: 'https://login.example.com/realms/demo/protocol/openid-connect/token',
+        userinfo_endpoint: 'https://login.example.com/realms/demo/protocol/openid-connect/userinfo',
+        jwks_uri: 'https://login.example.com/realms/demo/protocol/openid-connect/certs',
+        end_session_endpoint: 'https://login.example.com/realms/demo/protocol/openid-connect/logout',
+        grant_types_supported: ['authorization_code', 'refresh_token', 'client_credentials'],
+        response_types_supported: ['code'],
+        scopes_supported: ['openid', 'profile', 'email'],
+        id_token_signing_alg_values_supported: ['RS256', 'ES256'],
+        code_challenge_methods_supported: ['S256'],
+        token_endpoint_auth_methods_supported: ['client_secret_basic', 'private_key_jwt'],
+      },
+      null,
+      2,
+    );
+
+  function load(value: string) {
+    input.value = value;
+    void analyse();
+  }
+
+  let timer = 0;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(analyse, detectInput(input.value).kind === 'url' ? 600 : 150);
+  });
+  el('sample-saml').addEventListener('click', () => load(formatXml(sampleSaml())));
+  el('sample-oidc').addEventListener('click', () => load(sampleOidc()));
+  el('clear').addEventListener('click', () => {
+    load('');
+    input.focus();
+  });
+</script>

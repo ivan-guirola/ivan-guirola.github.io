@@ -1,0 +1,347 @@
+---
+import Base from '../layouts/Base.astro';
+import ProjectNav from '../components/ProjectNav.astro';
+import { routes } from '../data/nav';
+
+const t = {
+  title: 'Passkey demo',
+  description: 'Create a passkey and use it to sign in without a password, with your fingerprint, your face or your device PIN.',
+  lead: 'A passkey replaces the password with your fingerprint, your face or your device PIN. Create one here and use it to sign in.',
+  back: 'All projects',
+  unsupported: 'Your browser does not support passkeys. Try a recent version of Chrome, Safari, Edge or Firefox.',
+  createTitle: '1. Create your passkey',
+  createText: 'Your device will ask for your fingerprint, face or PIN.',
+  name: 'Your name',
+  namePlaceholder: 'For example, Ana',
+  create: 'Create passkey',
+  details: 'Technical details',
+  loginTitle: '2. Sign in',
+  loginText: 'Nothing to type: confirm on your device and the page checks it is you.',
+  login: 'Sign in',
+  deleteTitle: '3. Delete it',
+  deleteText: 'It is deleted from this page. To remove it from your device too, delete it in its password manager.',
+  delete: 'Delete passkey',
+  whereTitle: 'Where everything lives',
+  device: 'Your device',
+  browser: 'This page, in your browser',
+  server: 'Server',
+  serverText: 'Nothing. This demo does not send or store data outside your browser.',
+  client: {
+    waiting: 'Waiting for your device…',
+    created: 'Passkey created for {name}.',
+    cancelled: 'It was cancelled. You can try again.',
+    failed: 'It could not be completed',
+    loggedIn: 'You are signed in as {name}, with no password.',
+    rejected: 'Your identity could not be verified.',
+    deleted: 'Passkey deleted from this page.',
+    empty: 'Nothing yet',
+    privateKey: 'The private key of your passkey. It never leaves this place.',
+    publicKey: 'The public key of {name}. It is used to check your signature, not to sign in.',
+    yes: 'Yes',
+    no: 'No',
+    none: 'Not reported',
+    fields: {
+      credentialId: 'Identifier',
+      algorithm: 'Algorithm',
+      publicKey: 'Public key',
+      aaguid: 'Authenticator model (AAGUID)',
+      attachment: 'Authenticator type',
+      transports: 'Transports',
+      userVerified: 'User verified',
+      backupEligible: 'Syncable',
+      backupState: 'Synced',
+      signCount: 'Signature counter',
+    },
+    checks: {
+      type: 'It is a sign-in response',
+      challenge: 'It answers the question this page just asked',
+      origin: 'It comes from this website',
+      rpId: 'The passkey was created for this site',
+      userPresent: 'You were at the device',
+      signature: 'The signature matches your passkey',
+    },
+  },
+};
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <p><a href={routes.projects}>{t.back}</a></p>
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+  </header>
+
+  <p class="notice" data-pk="unsupported" hidden>{t.unsupported}</p>
+
+  <div class="demo">
+    <div class="demo-steps">
+      <section class="tool-step">
+        <h2>{t.createTitle}</h2>
+        <p>{t.createText}</p>
+        <form class="tool-form" data-pk="form">
+          <label>
+            {t.name}
+            <input name="userName" placeholder={t.namePlaceholder} maxlength="40" required autocomplete="off" />
+          </label>
+          <button class="btn" type="submit" data-pk="create">{t.create}</button>
+        </form>
+        <p class="status" data-pk="register-status" role="status"></p>
+        <details class="tech" data-pk="details" hidden>
+          <summary>{t.details}</summary>
+          <dl class="result" data-pk="registration"></dl>
+        </details>
+      </section>
+
+      <section class="tool-step" data-pk="login-step" data-locked>
+        <h2>{t.loginTitle}</h2>
+        <p>{t.loginText}</p>
+        <div class="actions">
+          <button class="btn" type="button" data-pk="authenticate" disabled>{t.login}</button>
+        </div>
+        <p class="status" data-pk="auth-status" role="status"></p>
+        <ul class="checks" data-pk="checks" hidden></ul>
+      </section>
+
+      <section class="tool-step" data-pk="delete-step" data-locked>
+        <h2>{t.deleteTitle}</h2>
+        <p>{t.deleteText}</p>
+        <div class="actions">
+          <button class="btn quiet" type="button" data-pk="forget" disabled>{t.delete}</button>
+        </div>
+      </section>
+    </div>
+
+    <aside class="where">
+      <h2>{t.whereTitle}</h2>
+      <dl>
+        <div data-pk="where-device">
+          <dt>{t.device}</dt>
+          <dd></dd>
+        </div>
+        <div data-pk="where-browser">
+          <dt>{t.browser}</dt>
+          <dd></dd>
+        </div>
+        <div>
+          <dt>{t.server}</dt>
+          <dd>{t.serverText}</dd>
+        </div>
+      </dl>
+    </aside>
+  </div>
+
+  <script type="application/json" id="pk-text" set:html={JSON.stringify(t.client)} />
+  <ProjectNav current="passkeys-webauthn" demos />
+</Base>
+
+<script>
+  import {
+    creationOptions,
+    readRegistration,
+    requestOptions,
+    verifyAssertion,
+    type AssertionLike,
+    type AttestationLike,
+    type Registration,
+  } from '../lib/webauthn/ceremony';
+
+  type Stored = Registration & { userName: string };
+
+  const STORAGE_KEY = 'passkey-demo';
+  const text = JSON.parse(document.getElementById('pk-text')!.textContent!);
+  const el = <T extends HTMLElement>(name: string) => document.querySelector<T>(`[data-pk="${name}"]`)!;
+
+  const form = el<HTMLFormElement>('form');
+  const createButton = el<HTMLButtonElement>('create');
+  const loginButton = el<HTMLButtonElement>('authenticate');
+  const deleteButton = el<HTMLButtonElement>('forget');
+  const details = el<HTMLDetailsElement>('details');
+  const registrationList = el<HTMLDListElement>('registration');
+  const checkList = el<HTMLUListElement>('checks');
+  const registerStatus = el('register-status');
+  const loginStatus = el('auth-status');
+  const whereDevice = el('where-device');
+  const whereBrowser = el('where-browser');
+
+  const rpId = location.hostname;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let current: Stored | null = null;
+
+  const random = (length: number) => crypto.getRandomValues(new Uint8Array(length));
+  const withName = (message: string, name: string) => message.replace('{name}', name);
+  const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  function setStatus(target: HTMLElement, message: string, state: 'ok' | 'error' | '' = '') {
+    target.textContent = message;
+    target.dataset.state = state;
+  }
+
+  function describeError(error: unknown) {
+    const name = error instanceof Error ? error.name : '';
+    if (name === 'NotAllowedError' || name === 'AbortError') return text.cancelled;
+    return `${text.failed}: ${error instanceof Error ? error.message : String(error)}`;
+  }
+
+  function setPlace(cell: HTMLElement, message: string, filled: boolean) {
+    cell.querySelector('dd')!.textContent = message;
+    cell.toggleAttribute('data-filled', filled);
+  }
+
+  function render(registration: Stored | null) {
+    current = registration;
+    const has = registration !== null;
+
+    loginButton.disabled = !has;
+    deleteButton.disabled = !has;
+    el('login-step').toggleAttribute('data-locked', !has);
+    el('delete-step').toggleAttribute('data-locked', !has);
+    details.hidden = !has;
+    checkList.hidden = true;
+    setPlace(whereDevice, has ? text.privateKey : text.empty, has);
+    setPlace(whereBrowser, has ? withName(text.publicKey, registration.userName) : text.empty, has);
+
+    registrationList.replaceChildren();
+    if (!registration) return;
+
+    const yesNo = (value: boolean) => (value ? text.yes : text.no);
+    const rows: [string, string][] = [
+      [text.fields.credentialId, registration.credentialId],
+      [text.fields.algorithm, `${registration.algName} (COSE ${registration.alg})`],
+      [text.fields.publicKey, JSON.stringify(registration.jwk)],
+      [text.fields.aaguid, registration.aaguid],
+      [text.fields.attachment, registration.attachment ?? text.none],
+      [text.fields.transports, registration.transports.join(', ') || text.none],
+      [text.fields.userVerified, yesNo(registration.flags.userVerified)],
+      [text.fields.backupEligible, yesNo(registration.flags.backupEligible)],
+      [text.fields.backupState, yesNo(registration.flags.backupState)],
+      [text.fields.signCount, String(registration.signCount)],
+    ];
+    for (const [label, value] of rows) {
+      const group = document.createElement('div');
+      const term = document.createElement('dt');
+      const detail = document.createElement('dd');
+      term.textContent = label;
+      detail.textContent = value;
+      group.append(term, detail);
+      registrationList.append(group);
+    }
+  }
+
+  function store(registration: Stored | null) {
+    try {
+      if (registration) localStorage.setItem(STORAGE_KEY, JSON.stringify(registration));
+      else localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+  }
+
+  function restore(): Stored | null {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
+      return saved && typeof saved.credentialId === 'string' && saved.jwk && saved.userName ? saved : null;
+    } catch {
+      return null;
+    }
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const userName = String(new FormData(form).get('userName')).trim();
+    if (!userName) return;
+    setStatus(registerStatus, text.waiting);
+    createButton.disabled = true;
+    try {
+      const credential = await navigator.credentials.create({
+        publicKey: creationOptions({
+          rpId,
+          rpName: document.title,
+          userName,
+          userId: random(16),
+          challenge: random(32),
+          residentKey: 'required',
+          userVerification: 'required',
+        }) as PublicKeyCredentialCreationOptions,
+      });
+      if (!credential) throw new Error('empty response');
+      const registration = { ...readRegistration(credential as unknown as AttestationLike), userName };
+      store(registration);
+      render(registration);
+      setStatus(registerStatus, withName(text.created, userName), 'ok');
+      setStatus(loginStatus, '');
+    } catch (error) {
+      setStatus(registerStatus, describeError(error), 'error');
+    } finally {
+      createButton.disabled = false;
+    }
+  });
+
+  loginButton.addEventListener('click', async () => {
+    if (!current) return;
+    const challenge = random(32);
+    setStatus(loginStatus, text.waiting);
+    checkList.hidden = true;
+    loginButton.disabled = true;
+    try {
+      const credential = await navigator.credentials.get({
+        publicKey: requestOptions({
+          rpId,
+          credentialId: current.credentialId,
+          challenge,
+          userVerification: 'required',
+        }) as PublicKeyCredentialRequestOptions,
+      });
+      if (!credential) throw new Error('empty response');
+      const result = await verifyAssertion({
+        credential: credential as unknown as AssertionLike,
+        registration: current,
+        challenge,
+        origin: location.origin,
+        rpId,
+      });
+
+      checkList.replaceChildren();
+      checkList.hidden = false;
+      setStatus(loginStatus, '');
+      for (const check of result.checks) {
+        const item = document.createElement('li');
+        item.dataset.check = check.id;
+        item.dataset.ok = String(check.ok);
+        item.textContent = text.checks[check.id];
+        checkList.append(item);
+        if (!reducedMotion) await pause(220);
+      }
+      setStatus(
+        loginStatus,
+        result.ok ? withName(text.loggedIn, current.userName) : text.rejected,
+        result.ok ? 'ok' : 'error',
+      );
+    } catch (error) {
+      setStatus(loginStatus, describeError(error), 'error');
+    } finally {
+      loginButton.disabled = !current;
+    }
+  });
+
+  deleteButton.addEventListener('click', async () => {
+    const deleted = current;
+    store(null);
+    render(null);
+    form.reset();
+    setStatus(registerStatus, text.deleted);
+    setStatus(loginStatus, '');
+    try {
+      const signal = (PublicKeyCredential as unknown as { signalUnknownCredential?: (o: object) => Promise<void> })
+        .signalUnknownCredential;
+      if (deleted && signal) await signal.call(PublicKeyCredential, { rpId, credentialId: deleted.credentialId });
+    } catch {}
+  });
+
+  if (!window.PublicKeyCredential || !navigator.credentials) {
+    el('unsupported').hidden = false;
+    createButton.disabled = true;
+    render(null);
+  } else {
+    const saved = restore();
+    render(saved);
+    if (saved) form.userName.value = saved.userName;
+  }
+</script>

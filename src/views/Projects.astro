@@ -1,0 +1,89 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import Preview from '../components/Preview.astro';
+import { routes, ui } from '../data/nav';
+import { site } from '../data/site';
+import { categoryIds, categoryLabels } from '../data/categories';
+
+const t = {
+  title: 'Projects',
+  description: 'Projects and builds by Iván Guirola, sorted by category.',
+  lead: 'My own builds, sorted by category.',
+  all: 'All',
+  filter: 'Filter by category',
+  empty: 'No projects published yet.',
+  emptyMore: 'I am preparing the first ones. Meanwhile, you can follow my activity on',
+};
+
+const projects = (await getCollection('projects', (e) => !e.data.draft)).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
+);
+const used = categoryIds.filter((id) => projects.some((p) => p.data.category === id));
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+    <p class="fine">{ui.disclaimer}</p>
+  </header>
+
+  {
+    projects.length === 0 ? (
+      <div class="empty">
+        <p>
+          <strong>{t.empty}</strong>
+        </p>
+        <p>
+          {t.emptyMore} <a href={site.github}>GitHub</a>.
+        </p>
+      </div>
+    ) : (
+      <>
+        {used.length > 1 && (
+          <div class="filter" role="group" aria-label={t.filter}>
+            <button type="button" data-filter="" aria-pressed="true">
+              {t.all}
+            </button>
+            {used.map((id) => (
+              <button type="button" data-filter={id} aria-pressed="false">
+                {categoryLabels[id]}
+              </button>
+            ))}
+          </div>
+        )}
+        <ul class="rows">
+          {projects.map((p) => (
+            <li data-category={p.data.category}>
+              <a class="row" href={`${routes.projects}${p.id}/`}>
+                <span class="cat">{categoryLabels[p.data.category]}</span>
+                <h2>{p.data.title}</h2>
+                <svg class="go" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" /></svg>
+                <p>{p.data.summary}</p>
+                <ul class="tags">
+                  {p.data.tags.map((tag) => (
+                    <li>{tag}</li>
+                  ))}
+                </ul>
+              </a>
+              <Preview id={p.id} />
+            </li>
+          ))}
+        </ul>
+      </>
+    )
+  }
+</Base>
+
+<script>
+  const buttons = document.querySelectorAll<HTMLButtonElement>('[data-filter]');
+  const items = document.querySelectorAll<HTMLElement>('[data-category]');
+  buttons.forEach((button) =>
+    button.addEventListener('click', () => {
+      const wanted = button.dataset.filter;
+      buttons.forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
+      items.forEach((item) => (item.hidden = !!wanted && item.dataset.category !== wanted));
+    }),
+  );
+</script>

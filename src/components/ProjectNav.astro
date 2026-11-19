@@ -1,0 +1,44 @@
+---
+import { getCollection } from 'astro:content';
+import { routes, ui } from '../data/nav';
+
+interface Props {
+  current: string;
+  demos?: boolean;
+}
+const { current, demos = false } = Astro.props;
+
+const all = (await getCollection('projects', (e) => !e.data.draft)).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf() || a.id.localeCompare(b.id),
+);
+const at = all.findIndex((p) => p.id === current);
+const previous = all[(at - 1 + all.length) % all.length];
+const next = all[(at + 1) % all.length];
+const rest = all.filter((p) => ![current, previous.id, next.id].includes(p.id));
+const href = (p: (typeof all)[number]) =>
+  demos && p.data.demo ? new URL(p.data.demo).pathname : `${routes.projects}${p.id}/`;
+---
+
+<p class="fine project-note">{ui.disclaimer}</p>
+{
+  all.length > 2 && (
+    <nav class="more no-print" aria-label="More projects">
+      <div class="more-pair">
+        <a href={href(previous)}>
+          <span>Previous</span>
+          <strong>{previous.data.title}</strong>
+        </a>
+        <a href={href(next)}>
+          <span>Next</span>
+          <strong>{next.data.title}</strong>
+        </a>
+      </div>
+      <p class="more-rest">
+        {rest.map((p) => (
+          <a href={href(p)}>{p.data.title}</a>
+        ))}
+        <a href={routes.projects}>All projects</a>
+      </p>
+    </nav>
+  )
+}

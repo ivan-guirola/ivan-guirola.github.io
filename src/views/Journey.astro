@@ -1,0 +1,703 @@
+---
+import Base from '../layouts/Base.astro';
+import ProjectNav from '../components/ProjectNav.astro';
+import { routes } from '../data/nav';
+
+const t = {
+  title: 'Ping AM journey viewer',
+  description:
+    'Open a journey exported from Ping AM or ForgeRock AM, see it as a diagram, check it for common mistakes and compare two exports.',
+  lead: 'In Ping AM, sign-in is built as a journey: a chain of steps such as asking for a password or sending a code. Open an exported journey to see it drawn, find steps that go nowhere, or compare the same journey in two environments.',
+  back: 'All projects',
+  tabs: { view: 'View a journey', compare: 'Compare two exports' },
+  label: 'Journey export (JSON)',
+  before: 'First export, for example production',
+  after: 'Second export, for example development',
+  sample: 'Load an example',
+  file: 'Open a file',
+  clear: 'Clear',
+  privacy:
+    'Exports from Frodo, the platform admin console or the AM REST API are accepted. What you open is read in your browser and sent nowhere.',
+  client: {
+    hint: 'Paste an export or open a file to see the journey.',
+    compareHint: 'Paste or open two exports to compare them.',
+    error: 'This does not look like a journey export: {message}.',
+    summary: '{name}: {steps} steps.',
+    clean: 'Nothing to review.',
+    review: '{count} thing(s) to review.',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    diagram: 'Diagram of the journey {name}',
+    findingsTitle: 'What to review',
+    settingsTitle: 'Journey settings',
+    pick: 'Select a step in the diagram to see what it does and how it is set up.',
+    start: 'Start',
+    success: 'Success',
+    failure: 'Failure',
+    fields: {
+      type: 'Type',
+      id: 'ID',
+      outcomes: 'Where it goes',
+      steps: 'Steps on this page',
+      settings: 'Settings',
+      script: 'Script',
+      engine: 'Scripting engine',
+      inner: 'Journey it runs',
+    },
+    engines: { next: 'Next-generation', legacy: 'Legacy' },
+    nowhere: 'not connected',
+    missing: 'a step that does not exist',
+    open: 'Open',
+    findings: {
+      noEntry: 'The journey has no valid first step.',
+      brokenLink: '“{node}” sends “{outcome}” to a step that does not exist.',
+      openOutcome: 'The outcome “{outcome}” of “{node}” is not connected to anything.',
+      unreachable: '“{node}” cannot be reached from the start. It may be left over from an earlier version.',
+      noSuccess: 'No path through the journey ends in success.',
+      legacyScript:
+        '“{node}” runs “{detail}” on the legacy scripting engine. Next-generation scripts are the supported option from AM 7.3.',
+      missingScript: 'The script used by “{node}” is not in this file.',
+      missingJourney: '“{node}” runs the journey “{detail}”, which is not in this file.',
+      emptyPage: 'The page “{node}” has no steps inside.',
+      disabled: 'The journey is disabled.',
+    },
+    compare: {
+      parts: {
+        changed: '{count} journey(s) changed',
+        same: '{count} unchanged',
+        added: '{count} only in the second export',
+        removed: '{count} only in the first export',
+      },
+      status: { changed: 'changed', same: 'unchanged', added: 'only in the second', removed: 'only in the first' },
+      sameText: 'This journey is the same in both exports.',
+      addedText: 'This journey is only in the second export.',
+      removedText: 'This journey is only in the first export.',
+      nodesTitle: 'Changes',
+      settingsTitle: 'Journey settings that changed',
+      kinds: { added: 'Added', removed: 'Removed', changed: 'Changed' },
+      fields: {
+        name: 'Name',
+        type: 'Type',
+        outcome: 'Outcome “{outcome}” goes to',
+        steps: 'Steps',
+        script: 'Script',
+        scriptEngine: 'Scripting engine',
+        scriptSource: 'Script code',
+        entry: 'First step',
+      },
+      nothing: 'nothing',
+      legend: 'The diagram shows the second export. Added steps are outlined in green and changed steps in amber.',
+    },
+  },
+};
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <p><a href={routes.projects}>{t.back}</a></p>
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+  </header>
+
+  <div class="debugger journey">
+    <div class="filter" role="group">
+      <button type="button" data-jv="tab-view" aria-pressed="true">{t.tabs.view}</button>
+      <button type="button" data-jv="tab-compare" aria-pressed="false">{t.tabs.compare}</button>
+    </div>
+
+    <section data-jv="view">
+      <label for="jv-input">{t.label}</label>
+      <textarea id="jv-input" data-jv="input" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+      <div class="debugger-buttons">
+        <button class="btn quiet" type="button" data-jv="sample">{t.sample}</button>
+        <label class="btn quiet file">{t.file}<input type="file" accept=".json,application/json" data-jv="file" /></label>
+        <button class="btn quiet" type="button" data-jv="clear">{t.clear}</button>
+      </div>
+    </section>
+
+    <section data-jv="compare" hidden>
+      <div class="jv-pair">
+        <div>
+          <label for="jv-before">{t.before}</label>
+          <textarea id="jv-before" data-jv="before" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+          <label class="btn quiet file">{t.file}<input type="file" accept=".json,application/json" data-jv="file-before" /></label>
+        </div>
+        <div>
+          <label for="jv-after">{t.after}</label>
+          <textarea id="jv-after" data-jv="after" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+          <label class="btn quiet file">{t.file}<input type="file" accept=".json,application/json" data-jv="file-after" /></label>
+        </div>
+      </div>
+      <div class="debugger-buttons">
+        <button class="btn quiet" type="button" data-jv="sample-pair">{t.sample}</button>
+        <button class="btn quiet" type="button" data-jv="clear-pair">{t.clear}</button>
+      </div>
+    </section>
+
+    <p class="fine">{t.privacy}</p>
+    <p class="status" data-jv="verdict" role="status">{t.client.hint}</p>
+
+    <div data-jv="output" hidden>
+      <div class="filter" role="group" data-jv="journeys"></div>
+      <div class="jv-tools">
+        <button class="btn quiet" type="button" data-jv="zoom-out" aria-label={t.client.zoomOut}>−</button>
+        <button class="btn quiet" type="button" data-jv="fit">Fit</button>
+        <button class="btn quiet" type="button" data-jv="zoom-in" aria-label={t.client.zoomIn}>+</button>
+      </div>
+      <div class="jv-canvas" data-jv="canvas"></div>
+      <div data-jv="report"></div>
+      <section class="jv-detail" data-jv="detail" aria-live="polite"></section>
+    </div>
+  </div>
+
+  <script type="application/json" id="jv-text" set:html={JSON.stringify(t.client)} />
+  <ProjectNav current="ping-am-journey-viewer" demos />
+</Base>
+
+<script>
+  import { checkJourney, type Finding } from '../lib/journey/check';
+  import { compareExports, type Change, type JourneyComparison, type NodeDiff } from '../lib/journey/diff';
+  import { layoutJourney, portsOf, type Box } from '../lib/journey/layout';
+  import { describeType, formatValue, outcomeLabel, typeLabel } from '../lib/journey/nodes';
+  import { FAILURE, SUCCESS, innerJourney, parseExport, scriptOf, type Journey, type JourneyExport } from '../lib/journey/parse';
+  import { DEVELOPMENT, PRODUCTION } from '../lib/journey/samples';
+
+  type State = 'ok' | 'warn' | 'error' | '';
+  type Mode = 'view' | 'compare';
+
+  const text = JSON.parse(document.getElementById('jv-text')!.textContent!);
+  const el = <T extends HTMLElement>(name: string) => document.querySelector<T>(`[data-jv="${name}"]`)!;
+  const make = <K extends keyof HTMLElementTagNameMap>(tag: K, content?: string, className?: string) => {
+    const node = document.createElement(tag);
+    if (content !== undefined) node.textContent = content;
+    if (className) node.className = className;
+    return node;
+  };
+  const SVG = 'http://www.w3.org/2000/svg';
+  const svg = <K extends keyof SVGElementTagNameMap>(tag: K, attributes: Record<string, string | number> = {}) => {
+    const node = document.createElementNS(SVG, tag);
+    for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, String(value));
+    return node;
+  };
+  const fill = (template: string, values: Record<string, string | number>) =>
+    template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? ''));
+  const clip = (value: string, size: number) => (value.length > size ? `${value.slice(0, size - 1)}…` : value);
+  const show = formatValue;
+  const words = (key: string) => {
+    const spaced = key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  };
+  const button = (label: string, onClick: () => void, className = 'jv-link') => {
+    const node = make('button', label, className);
+    node.type = 'button';
+    node.addEventListener('click', onClick);
+    return node;
+  };
+
+  const verdict = el('verdict');
+  const output = el('output');
+  const canvas = el('canvas');
+  const report = el('report');
+  const detail = el('detail');
+  const journeyPicker = el('journeys');
+  const inputs = {
+    view: el<HTMLTextAreaElement>('input'),
+    before: el<HTMLTextAreaElement>('before'),
+    after: el<HTMLTextAreaElement>('after'),
+  };
+
+  let mode: Mode = 'view';
+  let current: { journey: Journey; available: string[]; marks: Map<string, string>; findings: Finding[] } | undefined;
+  let viewExport: JourneyExport | undefined;
+  let comparison: { before: JourneyExport; after: JourneyExport; items: JourneyComparison[] } | undefined;
+  let selected: string | undefined;
+  let scale = 1;
+
+  function setVerdict(message: string, state: State) {
+    verdict.textContent = message;
+    verdict.dataset.state = state;
+  }
+
+  function nameOf(journey: Journey, id: string) {
+    if (id === SUCCESS) return text.success;
+    if (id === FAILURE) return text.failure;
+    return journey.nodes.find((node) => node.id === id)?.name;
+  }
+
+  function findingText(journey: Journey, finding: Finding) {
+    return fill(text.findings[finding.code], {
+      node: finding.node ? (nameOf(journey, finding.node) ?? finding.node) : '',
+      outcome: finding.detail ? outcomeLabel(finding.detail) : '',
+      detail: finding.detail ?? '',
+    });
+  }
+
+  function facts(rows: [string, string | Node | undefined][]) {
+    const list = make('dl', undefined, 'facts');
+    for (const [label, value] of rows) {
+      if (value === undefined || value === '') continue;
+      const group = make('div');
+      const dd = make('dd');
+      dd.append(value);
+      group.append(make('dt', label), dd);
+      list.append(group);
+    }
+    return list;
+  }
+
+  // Diagram
+
+  function drawBox(box: Box, journey: Journey, flags: Map<string, string>) {
+    const group = svg('g', { transform: `translate(${box.x} ${box.y})`, class: `jv-box ${box.kind}` });
+    if (box.kind === 'start') {
+      group.append(svg('circle', { cx: 20, cy: 20, r: 19 }));
+      const label = svg('text', { x: 20, y: 24, 'text-anchor': 'middle', class: 'jv-mini' });
+      label.textContent = text.start;
+      group.append(label);
+      return group;
+    }
+    if (box.kind !== 'node') {
+      group.append(svg('rect', { width: box.width, height: box.height, rx: 20 }));
+      const label = svg('text', { x: box.width / 2, y: 25, 'text-anchor': 'middle' });
+      label.textContent = box.kind === 'success' ? text.success : text.failure;
+      group.append(label);
+      return group;
+    }
+
+    const node = journey.nodes.find((candidate) => candidate.id === box.id)!;
+    group.setAttribute('tabindex', '0');
+    group.setAttribute('role', 'button');
+    group.setAttribute('aria-label', `${node.name}, ${typeLabel(node.type)}`);
+    group.dataset.node = node.id;
+    if (flags.has(node.id)) group.dataset.flag = flags.get(node.id)!;
+    if (current?.marks.has(node.id)) group.dataset.diff = current.marks.get(node.id)!;
+    if (node.id === selected) group.dataset.selected = 'true';
+
+    const full = svg('title');
+    full.textContent = `${node.name} (${node.type})`;
+    const title = svg('text', { x: 14, y: 24, class: 'jv-title' });
+    title.textContent = clip(node.name, 24);
+    const type = svg('text', { x: 14, y: 42, class: 'jv-type' });
+    type.textContent = clip(typeLabel(node.type), 30);
+    group.append(full, svg('rect', { width: box.width, height: box.height, rx: 10 }), title, type);
+
+    (node.children ?? []).forEach((child, index) => {
+      const row = svg('text', { x: 22, y: 68 + index * 22, class: 'jv-child' });
+      row.textContent = clip(child.name, 26);
+      group.append(row);
+    });
+
+    const divider = box.ports.length > 0 ? box.ports[0].y - 15 : box.height - 30;
+    group.append(svg('line', { x1: 0, x2: box.width, y1: divider, y2: divider, class: 'jv-divider' }));
+    for (const port of box.ports) {
+      const label = svg('text', { x: box.width - 14, y: port.y + 4, 'text-anchor': 'end', class: 'jv-port' });
+      label.textContent = outcomeLabel(port.outcome);
+      const target = port.target;
+      const connected = target && (target === SUCCESS || target === FAILURE || journey.nodes.some((n) => n.id === target));
+      group.append(label, svg('circle', { cx: box.width, cy: port.y, r: 4.5, class: connected ? 'jv-dot' : 'jv-dot open' }));
+    }
+
+    group.addEventListener('click', () => select(node.id));
+    group.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      select(node.id);
+    });
+    return group;
+  }
+
+  function draw() {
+    if (!current) return;
+    const { journey } = current;
+    const layout = layoutJourney(journey);
+    const flags = new Map<string, string>();
+    for (const finding of current.findings) {
+      if (finding.node && finding.level !== 'info' && flags.get(finding.node) !== 'error') flags.set(finding.node, finding.level);
+    }
+
+    const root = svg('svg', {
+      viewBox: `0 0 ${layout.width} ${layout.height}`,
+      width: Math.round(layout.width * scale),
+      height: Math.round(layout.height * scale),
+      role: 'group',
+      'aria-label': fill(text.diagram, { name: journey.name }),
+    });
+    const defs = svg('defs');
+    const marker = svg('marker', {
+      id: 'jv-arrow',
+      viewBox: '0 0 10 10',
+      refX: 9,
+      refY: 5,
+      markerWidth: 7,
+      markerHeight: 7,
+      orient: 'auto-start-reverse',
+    });
+    marker.append(svg('path', { d: 'M0 0L10 5L0 10z' }));
+    defs.append(marker);
+
+    const edges = svg('g', { class: 'jv-edges' });
+    for (const edge of layout.edges) {
+      const path = svg('path', { d: edge.path, 'marker-end': 'url(#jv-arrow)' });
+      if (selected && (edge.from === selected || edge.to === selected)) path.dataset.active = 'true';
+      edges.append(path);
+    }
+    root.append(defs, edges, ...layout.boxes.map((box) => drawBox(box, journey, flags)));
+    canvas.replaceChildren(root);
+    canvas.dataset.width = String(layout.width);
+  }
+
+  function fit() {
+    const width = Number(canvas.dataset.width || 0);
+    if (!width) return;
+    scale = Math.min(1, Math.max(0.7, (canvas.clientWidth - 2) / width));
+    draw();
+  }
+
+  el('zoom-in').addEventListener('click', () => {
+    scale = Math.min(2, scale * 1.25);
+    draw();
+  });
+  el('zoom-out').addEventListener('click', () => {
+    scale = Math.max(0.3, scale / 1.25);
+    draw();
+  });
+  el('fit').addEventListener('click', fit);
+
+  // Detail of a step
+
+  function select(id: string | undefined) {
+    selected = id;
+    draw();
+    renderDetail();
+    if (!id) return;
+    canvas.querySelector<SVGGElement>(`[data-node="${id}"]`)?.focus({ preventScroll: true });
+    detail.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  function renderDetail() {
+    const node = current && selected ? current.journey.nodes.find((candidate) => candidate.id === selected) : undefined;
+    if (!current || !node) {
+      detail.replaceChildren(make('p', text.pick, 'fine'));
+      return;
+    }
+    const { journey } = current;
+    const parts: Node[] = [];
+
+    const own = current.findings.filter((finding) => finding.node === node.id);
+    parts.push(make('h3', node.name), make('p', typeLabel(node.type), 'md-id'));
+    if (own.length > 0) {
+      const list = make('ul', undefined, 'findings');
+      list.append(...own.map((finding) => make('li', findingText(journey, finding))));
+      parts.push(list);
+    }
+    const about = describeType(node.type);
+    if (about) parts.push(make('p', about, 'jv-about'));
+
+    const outcomes = make('ul', undefined, 'jv-outcomes');
+    for (const outcome of portsOf(node)) {
+      const target = node.connections[outcome];
+      const item = make('li');
+      item.append(make('strong', outcomeLabel(outcome)), make('span', ` → ${target ? (nameOf(journey, target) ?? text.missing) : text.nowhere}`));
+      if (target && journey.nodes.some((n) => n.id === target)) item.append(' ', button(text.open, () => select(target)));
+      outcomes.append(item);
+    }
+
+    const script = scriptOf(node);
+    const found = script ? journey.scripts[script] : undefined;
+    const inner = innerJourney(node);
+    const innerValue =
+      inner && mode === 'view' && current.available.includes(inner) ? button(inner, () => showJourney(inner)) : inner;
+
+    parts.push(
+      facts([
+        [text.fields.outcomes, outcomes.childElementCount > 0 ? outcomes : undefined],
+        [text.fields.inner, innerValue],
+        [text.fields.script, found?.name ?? script],
+        [text.fields.engine, found ? text.engines[found.nextGen ? 'next' : 'legacy'] : undefined],
+        [text.fields.type, node.type],
+        [text.fields.id, node.id],
+      ]),
+    );
+
+    if (node.children?.length) {
+      parts.push(make('h4', text.fields.steps));
+      const list = make('ul', undefined, 'jv-steps');
+      for (const child of node.children) {
+        const item = make('li');
+        item.append(make('strong', child.name), make('span', typeLabel(child.type), 'jv-type-label'));
+        if (child.config) item.append(facts(Object.entries(child.config).map(([key, value]) => [words(key), show(value)])));
+        list.append(item);
+      }
+      parts.push(list);
+    }
+
+    const settings = Object.entries(node.config ?? {}).filter(([key]) => key !== 'script' && !(key === 'tree' && inner));
+    if (settings.length > 0) {
+      parts.push(make('h4', text.fields.settings), facts(settings.map(([key, value]) => [words(key), show(value)])));
+    }
+
+    if (found?.source) {
+      const code = make('details', undefined, 'tech');
+      code.open = true;
+      code.append(make('summary', found.name), make('pre', found.source));
+      parts.push(code);
+    }
+    detail.replaceChildren(...parts);
+  }
+
+  // Shared
+
+  function pickJourneys(names: string[], active: string, onPick: (name: string) => void, label = (name: string) => name) {
+    journeyPicker.hidden = names.length < 2;
+    journeyPicker.replaceChildren(
+      ...names.map((name) => {
+        const node = button(label(name), () => onPick(name), '');
+        node.dataset.journey = name;
+        node.setAttribute('aria-pressed', String(name === active));
+        return node;
+      }),
+    );
+  }
+
+  function present(journey: Journey, available: string[], marks: Map<string, string>, parts: Node[]) {
+    current = { journey, available, marks, findings: checkJourney(journey, available) };
+    selected = undefined;
+    report.replaceChildren(...parts);
+    output.hidden = false;
+    draw();
+    fit();
+    renderDetail();
+  }
+
+  // View mode
+
+  function showJourney(name: string) {
+    const journey = viewExport?.journeys.find((candidate) => candidate.name === name);
+    if (!viewExport || !journey) return;
+    const available = viewExport.journeys.map((candidate) => candidate.name);
+    pickJourneys(available, name, showJourney);
+
+    const findings = checkJourney(journey, available);
+    const issues = findings.filter((finding) => finding.level !== 'info');
+    const state: State = findings.some((f) => f.level === 'error') ? 'error' : issues.length > 0 ? 'warn' : 'ok';
+    const summary = fill(text.summary, { name: journey.name, steps: journey.nodes.length });
+    setVerdict(`${summary} ${issues.length > 0 ? fill(text.review, { count: issues.length }) : text.clean}`, state);
+
+    const parts: Node[] = [];
+    if (findings.length > 0) {
+      const list = make('ul', undefined, 'jv-findings');
+      for (const finding of findings) {
+        const item = make('li');
+        item.dataset.level = finding.level;
+        const message = findingText(journey, finding);
+        item.append(finding.node ? button(message, () => select(finding.node)) : message);
+        list.append(item);
+      }
+      parts.push(make('h2', text.findingsTitle), list);
+    }
+    const settings = Object.entries(journey.settings);
+    if (settings.length > 0) {
+      const more = make('details', undefined, 'tech');
+      more.append(make('summary', text.settingsTitle), facts(settings.map(([key, value]) => [words(key), show(value)])));
+      parts.push(more);
+    }
+    present(journey, available, new Map(), parts);
+  }
+
+  function analyseView() {
+    const value = inputs.view.value.trim();
+    viewExport = undefined;
+    if (!value) {
+      output.hidden = true;
+      return setVerdict(text.hint, '');
+    }
+    try {
+      viewExport = parseExport(value);
+    } catch (error) {
+      output.hidden = true;
+      return setVerdict(fill(text.error, { message: (error as Error).message.toLowerCase() }), 'error');
+    }
+    showJourney(viewExport.journeys[0].name);
+  }
+
+  // Compare mode
+
+  function fieldLabel(change: Change) {
+    const split = change.field.indexOf(':');
+    const kind = split === -1 ? change.field : change.field.slice(0, split);
+    const key = change.field.slice(split + 1);
+    if (kind === 'outcome') return fill(text.compare.fields.outcome, { outcome: outcomeLabel(key) });
+    if (kind === 'config') return words(key);
+    return text.compare.fields[kind] ?? words(kind);
+  }
+
+  function diffRows(changes: Change[]) {
+    const rows = make('dl', undefined, 'jv-diff-rows');
+    for (const change of changes) {
+      const group = make('div');
+      const values = make('dd');
+      values.append(
+        make('del', change.before ?? text.compare.nothing),
+        make('span', ' → ', 'jv-arrow'),
+        make('ins', change.after ?? text.compare.nothing),
+      );
+      group.append(make('dt', fieldLabel(change)), values);
+      rows.append(group);
+    }
+    return rows;
+  }
+
+  function changeList(nodes: NodeDiff[]) {
+    const list = make('ul', undefined, 'jv-changes');
+    for (const node of nodes) {
+      const item = make('li');
+      item.dataset.diff = node.status;
+      const head = make('div', undefined, 'jv-change-head');
+      head.append(
+        node.status === 'removed' ? make('strong', node.name) : button(node.name, () => select(node.id)),
+        make('span', text.compare.kinds[node.status], 'jv-kind'),
+        make('span', typeLabel(node.type), 'jv-type-label'),
+      );
+      item.append(head);
+      const rows = node.changes.filter((change) => change.field !== 'scriptSource');
+      if (rows.length > 0) item.append(diffRows(rows));
+      if (node.script) {
+        const code = make('details', undefined, 'tech');
+        code.open = true;
+        const pre = make('pre', undefined, 'jv-code-diff');
+        for (const line of node.script) {
+          const row = make('span', `${line.op} ${line.text}`);
+          row.dataset.op = line.op === '+' ? 'add' : line.op === '-' ? 'del' : 'same';
+          pre.append(row);
+        }
+        code.append(make('summary', text.compare.fields.scriptSource), pre);
+        item.append(code);
+      }
+      list.append(item);
+    }
+    return list;
+  }
+
+  function showComparison(name: string) {
+    if (!comparison) return;
+    const items = comparison.items;
+    const item = items.find((candidate) => candidate.name === name)!;
+    const source = item.status === 'removed' ? comparison.before : comparison.after;
+    const journey = source.journeys.find((candidate) => candidate.name === name)!;
+    const marks = new Map<string, string>();
+    for (const node of item.diff?.nodes ?? []) if (node.status !== 'removed') marks.set(node.id, node.status);
+    pickJourneys(
+      items.map((candidate) => candidate.name),
+      name,
+      showComparison,
+      (candidate) => `${candidate} (${text.compare.status[items.find((i) => i.name === candidate)!.status]})`,
+    );
+
+    const parts: Node[] = [];
+    if (item.status !== 'changed') {
+      parts.push(make('p', text.compare[`${item.status}Text`], 'jv-note'));
+    } else {
+      const diff = item.diff!;
+      if (diff.settings.length > 0) parts.push(make('h2', text.compare.settingsTitle), diffRows(diff.settings));
+      if (diff.nodes.length > 0) {
+        parts.push(make('h2', text.compare.nodesTitle), make('p', text.compare.legend, 'fine'), changeList(diff.nodes));
+      }
+    }
+    present(journey, source.journeys.map((candidate) => candidate.name), marks, parts);
+  }
+
+  function analyseCompare() {
+    const before = inputs.before.value.trim();
+    const after = inputs.after.value.trim();
+    comparison = undefined;
+    if (!before || !after) {
+      output.hidden = true;
+      return setVerdict(text.compareHint, '');
+    }
+    let pair: [JourneyExport, JourneyExport];
+    try {
+      pair = [parseExport(before), parseExport(after)];
+    } catch (error) {
+      output.hidden = true;
+      return setVerdict(fill(text.error, { message: (error as Error).message.toLowerCase() }), 'error');
+    }
+    const items = compareExports(...pair);
+    comparison = { before: pair[0], after: pair[1], items };
+    const count = (status: string) => items.filter((item) => item.status === status).length;
+    const differences = items.length - count('same');
+    const summary = ['changed', 'added', 'removed', 'same']
+      .filter((status) => count(status) > 0)
+      .map((status) => fill(text.compare.parts[status], { count: count(status) }))
+      .join(', ');
+    setVerdict(`${summary.charAt(0).toUpperCase()}${summary.slice(1)}.`, differences > 0 ? 'warn' : 'ok');
+    showComparison((items.find((item) => item.status !== 'same') ?? items[0]).name);
+  }
+
+  // Wiring
+
+  function setMode(next: Mode) {
+    mode = next;
+    el('view').hidden = next !== 'view';
+    el('compare').hidden = next !== 'compare';
+    el('tab-view').setAttribute('aria-pressed', String(next === 'view'));
+    el('tab-compare').setAttribute('aria-pressed', String(next === 'compare'));
+    if (next === 'view') analyseView();
+    else analyseCompare();
+  }
+
+  let timer: number | undefined;
+  const later = (run: () => void) => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(run, 250);
+  };
+
+  el('tab-view').addEventListener('click', () => setMode('view'));
+  el('tab-compare').addEventListener('click', () => setMode('compare'));
+  inputs.view.addEventListener('input', () => later(analyseView));
+  inputs.before.addEventListener('input', () => later(analyseCompare));
+  inputs.after.addEventListener('input', () => later(analyseCompare));
+
+  el('sample').addEventListener('click', () => {
+    inputs.view.value = PRODUCTION;
+    analyseView();
+  });
+  el('sample-pair').addEventListener('click', () => {
+    inputs.before.value = PRODUCTION;
+    inputs.after.value = DEVELOPMENT;
+    analyseCompare();
+  });
+  el('clear').addEventListener('click', () => {
+    inputs.view.value = '';
+    analyseView();
+    inputs.view.focus();
+  });
+  el('clear-pair').addEventListener('click', () => {
+    inputs.before.value = '';
+    inputs.after.value = '';
+    analyseCompare();
+    inputs.before.focus();
+  });
+
+  const pickers: [string, HTMLTextAreaElement, () => void][] = [
+    ['file', inputs.view, analyseView],
+    ['file-before', inputs.before, analyseCompare],
+    ['file-after', inputs.after, analyseCompare],
+  ];
+  for (const [name, target, run] of pickers) {
+    const picker = el<HTMLInputElement>(name);
+    picker.addEventListener('change', async () => {
+      const file = picker.files?.[0];
+      if (!file) return;
+      target.value = await file.text();
+      picker.value = '';
+      run();
+    });
+  }
+
+  let width = window.innerWidth;
+  window.addEventListener('resize', () => {
+    if (window.innerWidth === width) return;
+    width = window.innerWidth;
+    later(fit);
+  });
+</script>

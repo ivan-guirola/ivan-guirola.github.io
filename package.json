@@ -1,0 +1,27 @@
+{
+  "name": "ivan-guirola.github.io",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "og": "astro build && node scripts/og.mjs",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage --coverage.include='src/lib/**/*.ts' --coverage.exclude='**/*.test.ts' --coverage.exclude='**/fake-authenticator.ts' --coverage.thresholds.lines=80 --coverage.thresholds.branches=80 --coverage.thresholds.functions=80",
+    "test:e2e": "node e2e/passkeys.e2e.mjs && node e2e/debugger.e2e.mjs && node e2e/metadata.e2e.mjs && node e2e/oauth-flow.e2e.mjs && node e2e/journey.e2e.mjs && node e2e/okta-expression.e2e.mjs && node e2e/saviynt-username.e2e.mjs && node e2e/scim-lifecycle.e2e.mjs"
+  },
+  "type": "module",
+  "dependencies": {
+    "@astrojs/sitemap": "^3.7.5",
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "astro": "^7.4.12"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^5.1.0",
+    "jsdom": "^31.0.1",
+    "playwright-core": "^1.65.1",
+    "vitest": "^5.1.0"
+  }
+}

@@ -1,0 +1,651 @@
+---
+import Base from '../layouts/Base.astro';
+import ProjectNav from '../components/ProjectNav.astro';
+import { routes } from '../data/nav';
+import { sqlFunctions } from '../lib/saviynt/sql';
+import { EXAMPLES, SAMPLE_TAKEN, SAMPLE_USERS } from '../lib/saviynt/samples';
+
+const t = {
+  title: 'Saviynt username rule builder',
+  description:
+    'Build a Saviynt username rule from attributes, conditions and clean-up steps, get its SQL, and see the name each person would get.',
+  lead: 'Saviynt builds usernames with SQL over the data of each person, with # between the options it tries when a name is already taken. These rules grow long quickly. Put the username together from attributes and conditions, copy the SQL, and see the name each person would get before it reaches Saviynt.',
+  back: 'All projects',
+  tabs: { build: 'Build a rule', test: 'Test a rule' },
+  label: 'Rule',
+  examples: 'Examples',
+  sql: 'The SQL for Saviynt',
+  copy: 'Copy',
+  edit: 'Edit it as SQL',
+  separator: 'Separator between options',
+  addOption: 'Add an option',
+  maxLength: 'Highlight usernames longer than',
+  strict: 'Only lowercase letters, digits, dots, hyphens and underscores',
+  people: 'Sample people (CSV)',
+  peopleHint: 'The first line names the columns, which the rule reads as users.column. An empty cell counts as NULL.',
+  taken: 'Usernames already taken, one per line',
+  reset: 'Reset the samples',
+  preview: 'Usernames for the sample people',
+  traps: 'MySQL details that often break these rules',
+  trapList: [
+    'CONCAT returns NULL as soon as one value is NULL, so a missing middle name leaves the whole username empty. CONCAT_WS and IFNULL avoid it.',
+    '|| means OR in MySQL, not joining texts, and + only adds numbers. Use CONCAT.',
+    'SUBSTRING counts from 1, not 0. SUBSTRING(name, 0, 1) gives an empty text.',
+    'LENGTH counts bytes, so an accented letter counts twice: “García” has 6 letters but LENGTH gives 7. Use CHAR_LENGTH.',
+    'REPLACE is case-sensitive, and MySQL has no function to remove accents. Turn the text into lower case first, then replace each accented letter.',
+    "Comparisons ignore case: users.employeetype = 'contractor' also matches “Contractor”.",
+    'A CASE without ELSE gives NULL when no branch matches, and Saviynt then moves on to the next option.',
+  ],
+  reference: 'Supported functions',
+  note: 'Saviynt runs these rules on its MySQL database. This page imitates the MySQL functions most used in naming rules, so check the final rule in Saviynt.',
+  client: {
+    hint: 'Write a rule to see the usernames.',
+    summary: '{ok} of {total} people get a username with nothing to review.',
+    error: 'Option {rule} has a problem: {message}.',
+    singleError: 'The rule has a problem: {message}.',
+    csvError: 'The sample people cannot be read: {message}.',
+    lengthNote: 'The rule uses LENGTH, which counts bytes: an accented letter counts twice. CHAR_LENGTH counts letters.',
+    option: 'Option {n}',
+    uses: '{count} person(s)',
+    none: 'No username',
+    copied: 'Copied',
+    builder: {
+      option: 'Option {n}',
+      up: 'Move up',
+      down: 'Move down',
+      remove: 'Remove',
+      when: 'Only when',
+      everyone: 'Applies to everyone.',
+      addCondition: 'Add a condition',
+      and: 'And…',
+      or: 'or',
+      addGroup: 'Or…',
+      parts: 'Username made of',
+      addAttribute: 'Add an attribute',
+      addText: 'Add a text',
+      text: 'Text',
+      letters: 'letters',
+      all: 'all',
+      cleanup: 'Then',
+      lowercase: 'lower case',
+      accents: 'remove accents',
+      spaces: 'remove spaces',
+      symbols: 'remove apostrophes and hyphens',
+      cut: 'cut to',
+      characters: 'characters',
+      noParts: 'Add at least one attribute or text.',
+      partNames: {
+        whole: 'whole value',
+        firstWord: 'first word',
+        secondWord: 'second word',
+        lastWord: 'last word',
+        beforeAt: 'part before the @',
+      },
+      operators: {
+        is: 'is',
+        isNot: 'is not',
+        isEmpty: 'is empty',
+        isNotEmpty: 'is not empty',
+        contains: 'contains',
+        startsWith: 'starts with',
+      },
+      ifEmpty: { skip: 'if empty, skip this option', leave: 'if empty, leave it out' },
+      fallbackHint: 'If an option gives a name that is taken, or gives nothing, Saviynt tries the next one.',
+    },
+    notes: {
+      taken: 'Option {n} gave “{value}”, which is already taken.',
+      concatNull:
+        'Option {n} gave NULL because {columns} is empty, and CONCAT returns NULL when any value is NULL. CONCAT_WS or IFNULL avoid it.',
+      nullColumns: 'Option {n} gave NULL because {columns} is empty.',
+      sameNull: 'Option {n} gave NULL for the same reason.',
+      empty: 'Option {n} gave an empty text.',
+      exhausted: 'No option gave a free username.',
+      noneApplies: 'No option applies to this person.',
+    },
+    issues: {
+      tooLong: 'It has {detail} characters and the limit is {max}.',
+      uppercase: 'It has capital letters.',
+      spaces: 'It has spaces.',
+      characters: 'It has characters that are not allowed: {detail}',
+      edges: 'It starts or ends with a dot or a hyphen.',
+      doubleDot: 'It has two dots in a row.',
+    },
+  },
+};
+
+const fnList = Object.values(sqlFunctions).map((fn) => ({ signature: fn.signature, description: fn.description }));
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <p><a href={routes.projects}>{t.back}</a></p>
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+  </header>
+
+  <div class="debugger saviynt">
+    <div class="filter" role="group">
+      <button type="button" data-sv="tab-build" aria-pressed="true">{t.tabs.build}</button>
+      <button type="button" data-sv="tab-test" aria-pressed="false">{t.tabs.test}</button>
+    </div>
+
+    <section data-sv="build">
+      <ol class="sv-builder" data-sv="options-editor"></ol>
+      <div class="sv-builder-foot">
+        <button class="btn quiet" type="button" data-sv="add-option">{t.addOption}</button>
+        <label>
+          <span>{t.separator}</span>
+          <select data-sv="separator">
+            <option value="#">#</option>
+            <option value="###">###</option>
+          </select>
+        </label>
+      </div>
+      <p class="fine">{t.client.builder.fallbackHint}</p>
+      <h2>{t.sql}</h2>
+      <pre class="sv-sql" data-sv="sql"></pre>
+      <div class="debugger-buttons">
+        <button class="btn quiet" type="button" data-sv="copy">{t.copy}</button>
+        <button class="btn quiet" type="button" data-sv="edit">{t.edit}</button>
+      </div>
+    </section>
+
+    <section data-sv="test" hidden>
+      <label for="sv-rule">{t.label}</label>
+      <textarea id="sv-rule" data-sv="rule" rows="6" spellcheck="false" autocomplete="off" autocapitalize="off">{EXAMPLES[1].rule}</textarea>
+      <div class="sv-examples">
+        <h3>{t.examples}</h3>
+        <ul>
+          {
+            EXAMPLES.map((example) => (
+              <li>
+                <button class="jv-link" type="button" data-rule={example.rule}>
+                  {example.title}
+                </button>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </section>
+
+    <h2>{t.preview}</h2>
+    <div class="sv-settings">
+      <label>
+        <span>{t.maxLength}</span>
+        <input type="number" min="1" max="256" value="20" data-sv="max" />
+      </label>
+      <label class="sv-check">
+        <input type="checkbox" checked data-sv="strict" />
+        <span>{t.strict}</span>
+      </label>
+    </div>
+
+    <p class="status" data-sv="verdict" role="status">{t.client.hint}</p>
+    <p class="fine" data-sv="rule-notes" hidden></p>
+    <div data-sv="output">
+      <pre class="sv-pointer" data-sv="pointer" hidden></pre>
+      <ol class="sv-options" data-sv="options"></ol>
+      <ul class="sv-results" data-sv="results"></ul>
+    </div>
+
+    <details class="tech">
+      <summary>{t.people}</summary>
+      <p class="fine">{t.peopleHint}</p>
+      <textarea data-sv="users" aria-label={t.people} rows="9" spellcheck="false" autocomplete="off" autocapitalize="off">{SAMPLE_USERS}</textarea>
+      <label class="sv-label" for="sv-taken">{t.taken}</label>
+      <textarea id="sv-taken" data-sv="taken" rows="4" spellcheck="false" autocomplete="off" autocapitalize="off">{SAMPLE_TAKEN}</textarea>
+      <div class="debugger-buttons">
+        <button class="btn quiet" type="button" data-sv="reset">{t.reset}</button>
+      </div>
+    </details>
+
+    <details class="tech">
+      <summary>{t.traps}</summary>
+      <ul class="sv-traps">
+        {t.trapList.map((trap) => <li>{trap}</li>)}
+      </ul>
+    </details>
+
+    <details class="tech">
+      <summary>{t.reference}</summary>
+      <dl class="facts ok-reference">
+        {
+          fnList.map((fn) => (
+            <div>
+              <dt>
+                <code>{fn.signature}</code>
+              </dt>
+              <dd>{fn.description}</dd>
+            </div>
+          ))
+        }
+      </dl>
+    </details>
+
+    <p class="fine">{t.note}</p>
+  </div>
+
+  <script type="application/json" id="sv-text" set:html={JSON.stringify(t.client)} />
+  <script type="application/json" id="sv-sample" set:html={JSON.stringify({ users: SAMPLE_USERS, taken: SAMPLE_TAKEN })} />
+  <ProjectNav current="saviynt-username-rules" demos />
+</Base>
+
+<script>
+  import {
+    STARTER,
+    blankOption,
+    designSql,
+    type Condition,
+    type Design,
+    type Operator,
+    type Option,
+    type Part,
+    type Piece,
+  } from '../lib/saviynt/builder';
+  import { RuleError, compileRules, generate, parseCsv, ruleNotes, type Outcome } from '../lib/saviynt/naming';
+  import type { Row } from '../lib/saviynt/sql';
+
+  const text = JSON.parse(document.getElementById('sv-text')!.textContent!);
+  const words = text.builder;
+  const sample = JSON.parse(document.getElementById('sv-sample')!.textContent!);
+  const el = <T extends HTMLElement>(name: string) => document.querySelector<T>(`[data-sv="${name}"]`)!;
+  const make = <K extends keyof HTMLElementTagNameMap>(tag: K, content?: string, className?: string) => {
+    const node = document.createElement(tag);
+    if (content !== undefined) node.textContent = content;
+    if (className) node.className = className;
+    return node;
+  };
+  const fill = (template: string, values: Record<string, string | number>) =>
+    template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? ''));
+
+  const rule = el<HTMLTextAreaElement>('rule');
+  const users = el<HTMLTextAreaElement>('users');
+  const taken = el<HTMLTextAreaElement>('taken');
+  const max = el<HTMLInputElement>('max');
+  const strict = el<HTMLInputElement>('strict');
+  const verdict = el('verdict');
+  const output = el('output');
+  const pointer = el('pointer');
+  const options = el('options');
+  const results = el('results');
+  const notesLine = el('rule-notes');
+  const editor = el('options-editor');
+  const sqlBox = el('sql');
+  const separator = el<HTMLSelectElement>('separator');
+
+  let mode: 'build' | 'test' = 'build';
+  const design: Design = structuredClone(STARTER);
+  let columns: string[] = ['firstname', 'lastname'];
+
+  // Preview
+
+  function setVerdict(message: string, state: string) {
+    verdict.textContent = message;
+    verdict.dataset.state = state;
+  }
+
+  function caret(source: string, position: number) {
+    const before = source.slice(0, position);
+    const line = before.split('\n').length - 1;
+    const column = position - (before.lastIndexOf('\n') + 1);
+    return [...source.split('\n').slice(0, line + 1), `${' '.repeat(column)}^`].join('\n');
+  }
+
+  function person(row: Row) {
+    const lower = Object.fromEntries(Object.entries(row).map(([key, value]) => [key.toLowerCase(), value]));
+    const name = [lower.firstname, lower.lastname].filter(Boolean).join(' ');
+    return name || Object.values(row).filter(Boolean).slice(0, 2).join(' ') || '—';
+  }
+
+  function notes(outcome: Outcome, maxLength: number) {
+    const list: string[] = [];
+    let lastNull = '';
+    for (const attempt of outcome.attempts) {
+      const n = attempt.rule + 1;
+      const names = attempt.nullColumns.map((column) => `users.${column}`).join(', ');
+      if (attempt.outcome === 'taken') list.push(fill(text.notes.taken, { n, value: attempt.value! }));
+      if (attempt.outcome === 'empty') list.push(fill(text.notes.empty, { n }));
+      if (attempt.outcome === 'null' && !names) continue;
+      if (attempt.outcome === 'null') {
+        const template = attempt.concatNull ? text.notes.concatNull : text.notes.nullColumns;
+        const reason = `${template}|${names}`;
+        list.push(fill(reason === lastNull ? text.notes.sameNull : template, { n, columns: names }));
+        lastNull = reason;
+      }
+    }
+    if (outcome.username === null) list.push(list.length === 0 ? text.notes.noneApplies : text.notes.exhausted);
+    for (const issue of outcome.issues) list.push(fill(text.issues[issue.code], { detail: issue.detail ?? '', max: maxLength }));
+    return list;
+  }
+
+  function readSample() {
+    try {
+      const data = parseCsv(users.value);
+      columns = data.columns;
+      return data;
+    } catch (error) {
+      return error as Error;
+    }
+  }
+
+  function preview() {
+    const source = mode === 'build' ? designSql(design) : rule.value;
+    pointer.hidden = true;
+    notesLine.hidden = true;
+    if (mode === 'build') sqlBox.textContent = source;
+    if (!source.trim()) {
+      output.hidden = true;
+      return setVerdict(text.hint, '');
+    }
+
+    const data = readSample();
+    if (data instanceof Error) {
+      output.hidden = true;
+      return setVerdict(fill(text.csvError, { message: data.message.toLowerCase() }), 'error');
+    }
+
+    const maxLength = Math.max(1, Number(max.value) || 20);
+    let outcomes: Outcome[];
+    let count = 1;
+    try {
+      const rules = compileRules(source);
+      count = rules.length;
+      outcomes = generate(rules, data.rows, data.columns, taken.value.split('\n'), { maxLength, strictCharacters: strict.checked });
+    } catch (error) {
+      if (!(error instanceof RuleError)) throw error;
+      output.hidden = false;
+      options.replaceChildren();
+      results.replaceChildren();
+      setVerdict(fill(/#/.test(source) ? text.error : text.singleError, { rule: error.rule + 1, message: error.message }), 'error');
+      pointer.hidden = false;
+      pointer.textContent = caret(source, error.position);
+      return;
+    }
+
+    if (ruleNotes(source).includes('length')) {
+      notesLine.hidden = false;
+      notesLine.textContent = text.lengthNote;
+    }
+
+    output.hidden = false;
+    const clean = outcomes.filter((outcome) => outcome.username !== null && outcome.issues.length === 0).length;
+    setVerdict(fill(text.summary, { ok: clean, total: outcomes.length }), clean === outcomes.length ? 'ok' : 'warn');
+
+    options.hidden = count < 2;
+    options.replaceChildren(
+      ...Array.from({ length: count }, (_, index) => {
+        const item = make('li');
+        const used = outcomes.filter((outcome) => outcome.rule === index).length;
+        item.append(make('span', fill(text.option, { n: index + 1 })), make('strong', fill(text.uses, { count: used })));
+        return item;
+      }),
+    );
+
+    results.replaceChildren(
+      ...outcomes.map((outcome) => {
+        const item = make('li');
+        item.dataset.state = outcome.username === null ? 'error' : outcome.issues.length > 0 ? 'warn' : 'ok';
+        const head = make('div', undefined, 'sv-head');
+        head.append(make('span', person(outcome.row), 'sv-person'), make('code', outcome.username ?? text.none, 'sv-name'));
+        if (outcome.rule !== undefined && count > 1) head.append(make('span', fill(text.option, { n: outcome.rule + 1 }), 'sv-option'));
+        item.append(head);
+        const list = notes(outcome, maxLength);
+        if (list.length > 0) {
+          const ul = make('ul', undefined, 'sv-notes');
+          ul.append(...list.map((note) => make('li', note)));
+          item.append(ul);
+        }
+        return item;
+      }),
+    );
+  }
+
+  // Builder
+
+  function select<T extends string>(values: T[], current: T, label: (value: T) => string, onChange: (value: T) => void, name: string) {
+    const node = make('select');
+    node.setAttribute('aria-label', name);
+    for (const value of values) {
+      const option = make('option', label(value));
+      option.value = value;
+      option.selected = value === current;
+      node.append(option);
+    }
+    node.addEventListener('change', () => {
+      onChange(node.value as T);
+      renderBuilder();
+    });
+    return node;
+  }
+
+  function columnSelect(current: string, onChange: (value: string) => void) {
+    const list = columns.includes(current) ? columns : [current, ...columns];
+    return select(list, current, (value) => value, onChange, 'Attribute');
+  }
+
+  function numberInput(value: number | null, placeholder: string, label: string, onInput: (value: number | null) => void) {
+    const node = make('input');
+    node.type = 'number';
+    node.min = '1';
+    node.placeholder = placeholder;
+    node.value = value === null ? '' : String(value);
+    node.setAttribute('aria-label', label);
+    node.addEventListener('input', () => {
+      const number = Number(node.value);
+      onInput(node.value === '' || !Number.isFinite(number) || number < 1 ? null : Math.floor(number));
+      preview();
+    });
+    return node;
+  }
+
+  function textInput(value: string, label: string, onInput: (value: string) => void) {
+    const node = make('input');
+    node.type = 'text';
+    node.value = value;
+    node.setAttribute('aria-label', label);
+    node.addEventListener('input', () => {
+      onInput(node.value);
+      preview();
+    });
+    return node;
+  }
+
+  function action(label: string, onClick: () => void, symbol?: string) {
+    const node = make('button', symbol ?? label, symbol ? 'sv-icon' : 'jv-link');
+    node.type = 'button';
+    if (symbol) {
+      node.setAttribute('aria-label', label);
+      node.title = label;
+    }
+    node.addEventListener('click', () => {
+      onClick();
+      renderBuilder();
+    });
+    return node;
+  }
+
+  function move<T>(list: T[], index: number, step: number) {
+    const target = index + step;
+    if (target < 0 || target >= list.length) return;
+    [list[index], list[target]] = [list[target], list[index]];
+  }
+
+  function conditionRow(option: Option, group: Condition[], condition: Condition, index: number) {
+    const row = make('li', undefined, 'sv-row');
+    const operators = Object.keys(words.operators) as Operator[];
+    row.append(
+      columnSelect(condition.column, (value) => (condition.column = value)),
+      select(operators, condition.operator, (value) => words.operators[value], (value) => (condition.operator = value), 'Comparison'),
+    );
+    if (condition.operator !== 'isEmpty' && condition.operator !== 'isNotEmpty') {
+      row.append(textInput(condition.value, 'Value', (value) => (condition.value = value)));
+    }
+    row.append(
+      action(words.remove, () => {
+        group.splice(index, 1);
+        option.conditions = option.conditions.filter((candidate) => candidate.length > 0);
+      }, '×'),
+    );
+    return row;
+  }
+
+  function pieceRow(option: Option, piece: Piece, index: number) {
+    const row = make('li', undefined, 'sv-row');
+    if (piece.kind === 'text') {
+      row.append(make('span', words.text, 'sv-tag'), textInput(piece.text, words.text, (value) => (piece.text = value)));
+    } else {
+      const parts = Object.keys(words.partNames) as Part[];
+      const letters = make('span', undefined, 'sv-inline');
+      letters.append(numberInput(piece.length, words.all, words.letters, (value) => (piece.length = value)), make('span', words.letters));
+      row.append(
+        columnSelect(piece.column, (value) => (piece.column = value)),
+        select(parts, piece.part, (value) => words.partNames[value], (value) => (piece.part = value), 'Part'),
+        letters,
+        select(['skip', 'leave'] as const, piece.ifEmpty, (value) => words.ifEmpty[value], (value) => (piece.ifEmpty = value), 'If empty'),
+      );
+    }
+    row.append(
+      action(words.up, () => move(option.pieces, index, -1), '↑'),
+      action(words.down, () => move(option.pieces, index, 1), '↓'),
+      action(words.remove, () => option.pieces.splice(index, 1), '×'),
+    );
+    return row;
+  }
+
+  function check(label: string, value: boolean, onChange: (value: boolean) => void) {
+    const wrap = make('label', undefined, 'sv-check');
+    const box = make('input');
+    box.type = 'checkbox';
+    box.checked = value;
+    box.addEventListener('change', () => {
+      onChange(box.checked);
+      preview();
+    });
+    wrap.append(box, make('span', label));
+    return wrap;
+  }
+
+  function optionBlock(option: Option, index: number) {
+    const item = make('li', undefined, 'sv-opt');
+    const head = make('div', undefined, 'sv-opt-head');
+    head.append(
+      make('h3', fill(words.option, { n: index + 1 })),
+      action(words.up, () => move(design.options, index, -1), '↑'),
+      action(words.down, () => move(design.options, index, 1), '↓'),
+      action(words.remove, () => design.options.splice(index, 1), '×'),
+    );
+
+    const blank = (): Condition => ({ column: columns[0], operator: 'is', value: '' });
+    const conditions = make('div', undefined, 'sv-groups');
+    option.conditions.forEach((group, at) => {
+      if (at > 0) conditions.append(make('p', words.or, 'sv-or'));
+      const rows = make('ul', undefined, 'sv-rows sv-group');
+      rows.append(...group.map((condition, row) => conditionRow(option, group, condition, row)));
+      conditions.append(rows, action(words.and, () => group.push(blank())));
+    });
+    const parts = make('ul', undefined, 'sv-rows');
+    parts.append(...option.pieces.map((piece, at) => pieceRow(option, piece, at)));
+
+    const firstColumn = columns.find((name) => name.toLowerCase() === 'firstname') ?? columns[0];
+    const addPieces = make('div', undefined, 'sv-adds');
+    addPieces.append(
+      action(words.addAttribute, () =>
+        option.pieces.push({ kind: 'attribute', column: firstColumn, part: 'whole', length: null, ifEmpty: 'skip' }),
+      ),
+      action(words.addText, () => option.pieces.push({ kind: 'text', text: '.' })),
+    );
+
+    const cleanup = make('div', undefined, 'sv-cleanup');
+    const cut = make('span', undefined, 'sv-inline');
+    cut.append(make('span', words.cut), numberInput(option.maxLength, '—', words.cut, (value) => (option.maxLength = value)), make('span', words.characters));
+    cleanup.append(
+      check(words.lowercase, option.lowercase, (value) => (option.lowercase = value)),
+      check(words.accents, option.removeAccents, (value) => (option.removeAccents = value)),
+      check(words.spaces, option.removeSpaces, (value) => (option.removeSpaces = value)),
+      check(words.symbols, option.removeSymbols, (value) => (option.removeSymbols = value)),
+      cut,
+    );
+
+    item.append(
+      head,
+      make('h4', words.when),
+      option.conditions.length === 0 ? make('p', words.everyone, 'fine') : conditions,
+      action(option.conditions.length === 0 ? words.addCondition : words.addGroup, () => option.conditions.push([blank()])),
+      make('h4', words.parts),
+      option.pieces.length === 0 ? make('p', words.noParts, 'fine') : parts,
+      addPieces,
+      make('h4', words.cleanup),
+      cleanup,
+    );
+    return item;
+  }
+
+  function renderBuilder() {
+    readSample();
+    separator.value = design.separator;
+    editor.replaceChildren(...design.options.map(optionBlock));
+    preview();
+  }
+
+  el('add-option').addEventListener('click', () => {
+    design.options.push(blankOption(columns));
+    renderBuilder();
+  });
+  separator.addEventListener('change', () => {
+    design.separator = separator.value as Design['separator'];
+    preview();
+  });
+  el('copy').addEventListener('click', async () => {
+    await navigator.clipboard?.writeText(sqlBox.textContent ?? '').catch(() => undefined);
+    const button = el('copy');
+    const label = button.textContent;
+    button.textContent = text.copied;
+    window.setTimeout(() => (button.textContent = label), 1200);
+  });
+  el('edit').addEventListener('click', () => {
+    rule.value = designSql(design);
+    setMode('test');
+    rule.focus();
+  });
+
+  // Wiring
+
+  function setMode(next: 'build' | 'test') {
+    mode = next;
+    el('build').hidden = next !== 'build';
+    el('test').hidden = next !== 'test';
+    el('tab-build').setAttribute('aria-pressed', String(next === 'build'));
+    el('tab-test').setAttribute('aria-pressed', String(next === 'test'));
+    if (next === 'build') renderBuilder();
+    else preview();
+  }
+
+  let timer: number | undefined;
+  const later = (run: () => void) => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(run, 150);
+  };
+
+  el('tab-build').addEventListener('click', () => setMode('build'));
+  el('tab-test').addEventListener('click', () => setMode('test'));
+  rule.addEventListener('input', () => later(preview));
+  users.addEventListener('input', () => later(() => (mode === 'build' ? renderBuilder() : preview())));
+  for (const input of [taken, max]) input.addEventListener('input', () => later(preview));
+  strict.addEventListener('change', preview);
+  el('reset').addEventListener('click', () => {
+    users.value = sample.users;
+    taken.value = sample.taken;
+    if (mode === 'build') renderBuilder();
+    else preview();
+  });
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-rule]')) {
+    button.addEventListener('click', () => {
+      rule.value = button.dataset.rule!;
+      preview();
+      rule.focus();
+    });
+  }
+
+  renderBuilder();
+</script>

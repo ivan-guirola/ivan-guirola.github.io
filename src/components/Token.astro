@@ -1,0 +1,60 @@
+---
+import { generateKeyPairSync, sign } from 'node:crypto';
+import { site } from '../data/site';
+
+const t = {
+  caption: 'My profile, issued as an ID token',
+  header: 'Header',
+  payload: 'Payload',
+  signature: 'Signature',
+  note: 'ECDSA P-256 with SHA-256 (ES256)',
+  title: 'Senior IAM Architecture Specialist',
+};
+
+const header = { alg: 'ES256', typ: 'JWT' };
+const payload = {
+  iss: Astro.site?.origin,
+  sub: site.handle,
+  name: site.name,
+  title: t.title,
+  locality: site.location,
+  locale: 'en',
+  protocols: ['OAuth 2.0', 'OIDC', 'SAML 2.0', 'SCIM 2.0', 'FIDO2'],
+  access: ['Keycloak', 'Ping Identity', 'Microsoft Entra ID', 'Okta'],
+  authorization: ['RBAC', 'ABAC', 'PBAC'],
+  governance: ['Saviynt', 'PingIDM'],
+  pam: ['CyberArk'],
+};
+
+const b64 = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+const h = b64(header);
+const p = b64(payload);
+const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+const s = sign('sha256', Buffer.from(`${h}.${p}`), {
+  key: privateKey,
+  dsaEncoding: 'ieee-p1363',
+}).toString('base64url');
+
+const show = (value: unknown) => JSON.stringify(value).replaceAll('","', '", "');
+---
+
+<figure class="token">
+  <figcaption>{t.caption}</figcaption>
+  <p class="token-raw">
+    <span class="h" data-part>{h}</span>.<span class="p" data-part>{p}</span>.<span class="s" data-part>{s}</span>
+  </p>
+  <dl>
+    <div class="token-part h" data-part>
+      <dt>{t.header}</dt>
+      {Object.entries(header).map(([k, v]) => <dd>"{k}": <span class="v">{show(v)}</span></dd>)}
+    </div>
+    <div class="token-part p" data-part>
+      <dt>{t.payload}</dt>
+      {Object.entries(payload).map(([k, v]) => <dd>"{k}": <span class="v">{show(v)}</span></dd>)}
+    </div>
+    <div class="token-part s" data-part>
+      <dt>{t.signature}</dt>
+      <dd class="note">{t.note}</dd>
+    </div>
+  </dl>
+</figure>

@@ -1,0 +1,222 @@
+---
+import Base from '../layouts/Base.astro';
+import ProjectNav from '../components/ProjectNav.astro';
+import { routes } from '../data/nav';
+import { functions } from '../lib/okta-el/evaluate';
+import { EXAMPLES, SAMPLE_CONTEXT } from '../lib/okta-el/samples';
+
+const t = {
+  title: 'Okta expression tester',
+  description:
+    'Write an Okta Expression Language expression and see its result straight away, against a sample user you can edit.',
+  lead: 'Okta uses short expressions to build attributes, decide who joins a group and fill tokens. In Okta you only see whether one works after saving it. Write it here and see the result as you type.',
+  back: 'All projects',
+  label: 'Expression',
+  examples: 'Examples',
+  uses: { mapping: 'Attribute mappings', rule: 'Group rules', claim: 'Token claims' },
+  contextTitle: 'Sample user and groups',
+  contextHint:
+    'The expression runs against this user. Change any value to see how the result changes. Groups have a source: OKTA, or the directory they come from.',
+  reset: 'Reset the sample',
+  reference: 'Supported functions',
+  note: 'This runs the most used part of the Okta Expression Language in your browser. Okta may behave differently in edge cases, so check the result in Okta before relying on it.',
+  client: {
+    hint: 'Write an expression to see its result.',
+    ok: 'The result is {type}.',
+    types: {
+      text: 'text',
+      number: 'a number',
+      boolean: 'true or false',
+      list: 'a list',
+      object: 'an object',
+      nothing: 'nothing (null)',
+    },
+    uses: {
+      boolean: 'True or false results can be used as the condition of a group rule.',
+      list: 'Lists are used for attributes with several values and for group claims in tokens.',
+      nothing: 'Okta leaves the attribute empty when an expression returns nothing.',
+    },
+    error: 'The expression has a problem.',
+    contextError: 'The sample user is not valid JSON: {message}.',
+    used: 'Functions used',
+  },
+};
+
+const fnList = Object.values(functions).map((fn) => ({ signature: fn.signature, description: fn.description }));
+const uses = ['mapping', 'rule', 'claim'] as const;
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <p><a href={routes.projects}>{t.back}</a></p>
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+  </header>
+
+  <div class="debugger okta">
+    <label for="ok-input">{t.label}</label>
+    <textarea id="ok-input" data-ok="input" rows="3" spellcheck="false" autocomplete="off" autocapitalize="off">{EXAMPLES[0].expression}</textarea>
+
+    <p class="status" data-ok="verdict" role="status">{t.client.hint}</p>
+    <div data-ok="output">
+      <pre class="ok-value" data-ok="value"></pre>
+      <p class="fine" data-ok="use"></p>
+      <div data-ok="used"></div>
+    </div>
+
+    <h2>{t.examples}</h2>
+    <div class="ok-examples">
+      {
+        uses.map((use) => (
+          <div>
+            <h3>{t.uses[use]}</h3>
+            <ul>
+              {EXAMPLES.filter((example) => example.use === use).map((example) => (
+                <li>
+                  <button class="jv-link" type="button" data-example={example.expression}>
+                    {example.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+
+    <details class="tech">
+      <summary>{t.contextTitle}</summary>
+      <p class="fine">{t.contextHint}</p>
+      <textarea data-ok="context" aria-label={t.contextTitle} spellcheck="false" autocomplete="off" autocapitalize="off" rows="18">{JSON.stringify(SAMPLE_CONTEXT, null, 2)}</textarea>
+      <div class="debugger-buttons">
+        <button class="btn quiet" type="button" data-ok="reset">{t.reset}</button>
+      </div>
+    </details>
+
+    <details class="tech">
+      <summary>{t.reference}</summary>
+      <dl class="facts ok-reference">
+        {
+          fnList.map((fn) => (
+            <div>
+              <dt>
+                <code>{fn.signature}</code>
+              </dt>
+              <dd>{fn.description}</dd>
+            </div>
+          ))
+        }
+      </dl>
+    </details>
+
+    <p class="fine">{t.note}</p>
+  </div>
+
+  <script type="application/json" id="ok-text" set:html={JSON.stringify(t.client)} />
+  <script type="application/json" id="ok-sample" set:html={JSON.stringify(SAMPLE_CONTEXT)} />
+  <ProjectNav current="okta-expression-tester" demos />
+</Base>
+
+<script>
+  import { evaluate, functions, typeOf, type Context } from '../lib/okta-el/evaluate';
+  import { ExpressionError } from '../lib/okta-el/parse';
+
+  const text = JSON.parse(document.getElementById('ok-text')!.textContent!);
+  const sample = document.getElementById('ok-sample')!.textContent!;
+  const el = <T extends HTMLElement>(name: string) => document.querySelector<T>(`[data-ok="${name}"]`)!;
+  const make = <K extends keyof HTMLElementTagNameMap>(tag: K, content?: string, className?: string) => {
+    const node = document.createElement(tag);
+    if (content !== undefined) node.textContent = content;
+    if (className) node.className = className;
+    return node;
+  };
+  const fill = (template: string, values: Record<string, string>) =>
+    template.replace(/\{(\w+)\}/g, (_, key: string) => values[key] ?? '');
+
+  const input = el<HTMLTextAreaElement>('input');
+  const contextInput = el<HTMLTextAreaElement>('context');
+  const verdict = el('verdict');
+  const output = el('output');
+  const value = el('value');
+  const use = el('use');
+  const used = el('used');
+
+  function setVerdict(message: string, state: string) {
+    verdict.textContent = message;
+    verdict.dataset.state = state;
+  }
+
+  function pointer(source: string, position: number) {
+    const before = source.slice(0, position);
+    const line = before.split('\n').length - 1;
+    const column = position - (before.lastIndexOf('\n') + 1);
+    return [...source.split('\n').slice(0, line + 1), `${' '.repeat(column)}^`].join('\n');
+  }
+
+  function show() {
+    const source = input.value;
+    used.replaceChildren();
+    use.textContent = '';
+    if (!source.trim()) {
+      output.hidden = true;
+      return setVerdict(text.hint, '');
+    }
+
+    let context: Context;
+    try {
+      context = JSON.parse(contextInput.value);
+    } catch (error) {
+      output.hidden = true;
+      return setVerdict(fill(text.contextError, { message: (error as Error).message }), 'error');
+    }
+
+    output.hidden = false;
+    try {
+      const result = evaluate(source, context);
+      const type = typeOf(result.value);
+      setVerdict(fill(text.ok, { type: text.types[type] }), 'ok');
+      value.dataset.type = type;
+      value.textContent = typeof result.value === 'string' ? `"${result.value}"` : JSON.stringify(result.value, null, 1);
+      use.textContent = text.uses[type] ?? '';
+      if (result.used.length > 0) {
+        const list = make('dl', undefined, 'facts');
+        for (const name of result.used) {
+          const group = make('div');
+          const term = make('dt');
+          term.append(make('code', functions[name].signature));
+          group.append(term, make('dd', functions[name].description));
+          list.append(group);
+        }
+        used.append(make('h3', text.used), list);
+      }
+    } catch (error) {
+      if (!(error instanceof ExpressionError)) throw error;
+      setVerdict(`${text.error} ${error.message}.`, 'error');
+      value.dataset.type = 'error';
+      value.textContent = pointer(source, error.position);
+    }
+  }
+
+  let timer: number | undefined;
+  const later = () => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(show, 150);
+  };
+
+  input.addEventListener('input', later);
+  contextInput.addEventListener('input', later);
+  el('reset').addEventListener('click', () => {
+    contextInput.value = JSON.stringify(JSON.parse(sample), null, 2);
+    show();
+  });
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-example]')) {
+    button.addEventListener('click', () => {
+      input.value = button.dataset.example!;
+      show();
+      input.focus();
+      input.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  }
+
+  show();
+</script>

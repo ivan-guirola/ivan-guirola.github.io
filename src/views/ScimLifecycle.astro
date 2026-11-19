@@ -1,0 +1,215 @@
+---
+import Base from '../layouts/Base.astro';
+import ProjectNav from '../components/ProjectNav.astro';
+import { routes } from '../data/nav';
+import { EVENTS, PROVIDERS } from '../lib/scim/lifecycle';
+
+const t = {
+  title: 'SCIM lifecycle viewer',
+  description:
+    'See the SCIM calls Microsoft Entra ID and Okta send to an application when someone joins, changes department, leaves or comes back.',
+  lead: 'When someone joins, changes role or leaves, the identity provider tells each connected application through SCIM. Pick a provider and an event to see every call it sends, in order, and how the account in the application ends up.',
+  back: 'All projects',
+  providerLabel: 'Identity provider',
+  eventLabel: 'What happens to Laura',
+  providers: { entra: 'Microsoft Entra ID', okta: 'Okta' },
+  events: {
+    join: 'Joins the company',
+    move: 'Changes department',
+    group: 'Joins a group',
+    leave: 'Leaves the company',
+    return: 'Comes back',
+    delete: 'Is deleted',
+  },
+  callsTitle: 'What the application receives',
+  accountTitle: 'The account in the application',
+  note: 'Based on the Microsoft Entra ID and Okta documentation for SCIM 2.0 (RFC 7643 and RFC 7644), with the default attribute mappings. Mappings, scoping and settings change what a real connection sends.',
+  client: {
+    summaries: {
+      entra: {
+        join: 'Laura is assigned to the application in Entra ID. Entra works in cycles that run about every 40 minutes. On the next one, it looks for her account in the application and, as there is none, creates it.',
+        move: 'Laura moves from Finance to Sales. On its next cycle, Entra sends only the attribute that changed.',
+        group: 'Laura is added to the Sales team group, which Entra already provisions to the application. Entra adds her to the group.',
+        leave: 'Laura’s account is disabled in Entra ID, or she is removed from the application. Entra does not delete her account: it marks it as inactive, so it can be restored.',
+        return: 'Laura’s account is enabled again in Entra ID. Entra marks it as active, and she keeps her data and her groups.',
+        delete: 'Laura is deleted in Entra ID. Entra first marks her account as inactive. When the deletion becomes permanent, usually 30 days later, it deletes the account in the application.',
+      },
+      okta: {
+        join: 'Laura is assigned to the application in Okta. Okta does not wait for a cycle: the assignment starts the provisioning. It looks for her account in the application and, as there is none, creates it.',
+        move: 'Laura moves from Finance to Sales. Okta reads the account and sends it back whole, with the new department.',
+        group: 'Laura is added to the Sales team group, which Okta pushes to the application. Okta adds her to the group.',
+        leave: 'Laura is deactivated in Okta, or removed from the application. Okta marks her account as inactive.',
+        return: 'Laura is reactivated in Okta. Okta marks her account as active again, with her data and groups.',
+        delete: 'Laura is deleted in Okta. Okta never deletes accounts in the application: it only marks them as inactive. Removing them is left to the application.',
+      },
+    },
+    notes: {
+      entra: {
+        join: 'Entra finds existing accounts by a matching attribute, usually userName, which normally comes from the user principal name. If the application already has an account with that username, Entra takes it over instead of creating another one.',
+        move: 'Entra writes the operation with a capital letter ("Replace", "Add"), while most examples of the standard use lowercase. The standard says the case should not matter, so the application must accept both.',
+        group: 'Entra only sends groups that are assigned to the application, and only when group provisioning is turned on.',
+        leave: 'Depending on the connection, Entra may send active as the text "False" instead of false. Microsoft has a setting that makes it follow the standard: lowercase operations and a real true or false. The application should accept every form.',
+        return: 'This only works while the account still exists in Entra, that is, before a deletion becomes permanent.',
+        delete: 'For about 30 days the account is only inactive. Anything the application must keep, such as audit records, should not depend on the account still existing after that.',
+      },
+      okta: {
+        join: 'Okta always includes a password when it creates an account, even with password sync turned off. Okta calls it a placeholder for older systems, so the application can ignore it.',
+        move: 'As Okta replaces the whole account, the application must keep any attribute Okta does not manage, or a careless implementation will blank it.',
+        group: 'Okta only sends the groups chosen under Push Groups in the application settings.',
+        leave: 'Okta does not delete the account, not even later: the PATCH above is all it sends. The inactive account stays in the application until the application removes it.',
+        return: '',
+        delete: 'If the application must delete accounts, it has to do it itself, for example after a set time inactive.',
+      },
+    },
+    steps: {
+      search: 'Looks for an account with Laura’s username. None is found.',
+      create: 'Creates the account. The application answers with the new account and its id, which the provider keeps for every later call.',
+      read: 'Reads the account as it is now.',
+      replace: 'Sends the whole account back, as it read it, with the new department, replacing what was there.',
+      update: 'Changes only the department.',
+      addMember: 'Adds Laura to the members of the group.',
+      deactivate: 'Marks the account as inactive. Laura can no longer sign in to the application.',
+      reactivate: 'Marks the account as active again. Laura can sign in once more.',
+      remove: 'Deletes the account for good.',
+    },
+    later: 'About 30 days later',
+    status: { 200: 'OK', 201: 'Created', 204: 'No content' } as Record<number, string>,
+    request: 'Request',
+    response: 'Response',
+    noBody: 'No body.',
+    none: 'There was no account before.',
+    gone: 'The account no longer exists.',
+    legend: 'Green lines are new, red lines are gone.',
+  },
+};
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <p><a href={routes.projects}>{t.back}</a></p>
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+  </header>
+
+  <div class="debugger scim">
+    <p class="sc-label" id="sc-provider">{t.providerLabel}</p>
+    <div class="filter" role="group" aria-labelledby="sc-provider">
+      {
+        PROVIDERS.map((provider, index) => (
+          <button type="button" data-provider={provider} aria-pressed={String(index === 0)}>
+            {t.providers[provider]}
+          </button>
+        ))
+      }
+    </div>
+    <p class="sc-label" id="sc-event">{t.eventLabel}</p>
+    <div class="filter" role="group" aria-labelledby="sc-event">
+      {
+        EVENTS.map((event, index) => (
+          <button type="button" data-event={event} aria-pressed={String(index === 0)}>
+            {t.events[event]}
+          </button>
+        ))
+      }
+    </div>
+
+    <section aria-live="polite">
+      <p class="sc-summary" data-sc="summary"></p>
+      <h2>{t.callsTitle}</h2>
+      <ol class="sc-calls" data-sc="calls"></ol>
+      <p class="sc-note" data-sc="note"></p>
+      <h2>{t.accountTitle}</h2>
+      <p class="fine" data-sc="account-hint"></p>
+      <pre class="jv-code-diff" data-sc="account"></pre>
+    </section>
+
+    <p class="fine sc-foot">{t.note}</p>
+  </div>
+
+  <script type="application/json" id="sc-text" set:html={JSON.stringify(t.client)} />
+  <ProjectNav current="scim-lifecycle-viewer" demos />
+</Base>
+
+<script>
+  import { json, scenario, type Call, type Event, type Provider } from '../lib/scim/lifecycle';
+  import { lineDiff } from '../lib/journey/diff';
+
+  const text = JSON.parse(document.getElementById('sc-text')!.textContent!);
+  const el = (name: string) => document.querySelector<HTMLElement>(`[data-sc="${name}"]`)!;
+  const make = <K extends keyof HTMLElementTagNameMap>(tag: K, content?: string, className?: string) => {
+    const node = document.createElement(tag);
+    if (content !== undefined) node.textContent = content;
+    if (className) node.className = className;
+    return node;
+  };
+
+  const providerButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-provider]')];
+  const eventButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-event]')];
+  let provider: Provider = 'entra';
+  let event: Event = 'join';
+
+  const statusText = (status: number) => `${status} ${text.status[status] ?? ''}`.trim();
+
+  function callItem(call: Call) {
+    const item = make('li', undefined, 'sc-call');
+    item.dataset.method = call.method;
+    if (call.later) item.append(make('p', text.later, 'sc-later'));
+    const line = make('p', undefined, 'sc-line');
+    line.append(make('span', call.method, 'sc-method'), make('code', call.path, 'sc-path'), make('span', statusText(call.status), 'sc-status'));
+    item.append(line, make('p', text.steps[call.step], 'sc-step'));
+
+    const details = make('details', undefined, 'tech');
+    details.append(
+      make('summary', `${text.request} / ${text.response}`),
+      make('h3', text.request),
+      make('pre', `${call.method} ${call.path}\n\n${call.body ? json(call.body) : text.noBody}`),
+      make('h3', text.response),
+      make('pre', `${statusText(call.status)}\n\n${call.response ? json(call.response) : text.noBody}`),
+    );
+    item.append(details);
+    return item;
+  }
+
+  function render() {
+    const found = scenario(provider, event);
+    el('summary').textContent = text.summaries[provider][event];
+    el('calls').replaceChildren(...found.calls.map(callItem));
+    const note = text.notes[provider][event];
+    el('note').textContent = note;
+    el('note').hidden = !note;
+
+    const before = found.before ? json(found.before) : '';
+    const after = found.after ? json(found.after) : '';
+    const lines = !before
+      ? after.split('\n').map((line) => ({ op: '+', text: line }))
+      : !after
+        ? before.split('\n').map((line) => ({ op: '-', text: line }))
+        : lineDiff(before, after);
+    el('account').replaceChildren(
+      ...lines.map((line) => {
+        const row = make('span', `${line.op} ${line.text}`);
+        row.dataset.op = line.op === '+' ? 'add' : line.op === '-' ? 'del' : 'same';
+        return row;
+      }),
+    );
+    el('account-hint').textContent = [!found.before ? text.none : '', !found.after ? text.gone : '', text.legend].filter(Boolean).join(' ');
+
+    for (const button of providerButtons) button.setAttribute('aria-pressed', String(button.dataset.provider === provider));
+    for (const button of eventButtons) button.setAttribute('aria-pressed', String(button.dataset.event === event));
+  }
+
+  for (const button of providerButtons) {
+    button.addEventListener('click', () => {
+      provider = button.dataset.provider as Provider;
+      render();
+    });
+  }
+  for (const button of eventButtons) {
+    button.addEventListener('click', () => {
+      event = button.dataset.event as Event;
+      render();
+    });
+  }
+
+  render();
+</script>

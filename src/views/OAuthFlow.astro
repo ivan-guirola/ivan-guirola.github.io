@@ -1,0 +1,286 @@
+---
+import Base from '../layouts/Base.astro';
+import ProjectNav from '../components/ProjectNav.astro';
+import { routes } from '../data/nav';
+
+const t = {
+  title: 'OAuth flow picker',
+  description:
+    'Answer a few questions about the application you want to connect and see which OAuth 2.0 flow fits it, how to set it up and what to avoid.',
+  lead: 'OAuth has several ways of signing in, and each one fits a different kind of application. Answer a few questions about yours to see which one applies, how to set it up and what to avoid.',
+  back: 'All projects',
+  client: {
+    change: 'Change',
+    restart: 'Start again',
+    resultLabel: 'Recommended flow',
+    steps: 'How it goes',
+    setup: 'How to set it up',
+    avoidTitle: 'What to avoid',
+    tech: 'Technical details',
+    note: 'This follows the current OAuth security best practice (RFC 9700) and the OAuth 2.1 draft. It is a starting point: a real design also weighs the identity provider, the APIs and the organisation around them.',
+    questions: {
+      actor: {
+        ask: 'Who is signing in?',
+        options: [
+          ['person', 'A person', 'Someone opens the application and signs in.'],
+          ['service', 'Another program', 'A service, a job or a script calls an API with nobody in front of it.'],
+          ['device', 'A person, on a device with no browser', 'A TV, a console, a command-line tool or a kiosk.'],
+        ],
+      },
+      app: {
+        ask: 'What kind of application is it?',
+        options: [
+          ['web', 'A website that runs on a server', 'The pages are built on your server: Java, .NET, PHP, Node and similar.'],
+          ['spa', 'An application that runs in the browser', 'React, Angular, Vue or similar.'],
+          ['native', 'A mobile or desktop application', 'Installed on a phone or a computer.'],
+        ],
+      },
+      backend: {
+        ask: 'Does it have its own server behind it?',
+        options: [
+          [true, 'Yes', 'The part in the browser talks to a server you control.'],
+          [false, 'No', 'It calls the APIs straight from the browser.'],
+        ],
+      },
+      onBehalf: {
+        ask: 'Does it act for itself or for a user?',
+        options: [
+          [false, 'For itself', 'A nightly job, an integration, one service calling another.'],
+          [true, 'For a user', 'It received a request from a user and passes it on to another API.'],
+        ],
+      },
+      exposure: {
+        ask: 'Where does it run?',
+        options: [
+          ['internal', 'Inside your own network', 'Only your organisation can reach it.'],
+          ['internet', 'On the internet or at a third party', 'Reachable from outside, or run by a partner or a supplier.'],
+        ],
+      },
+      sensitive: {
+        ask: 'How sensitive is what it protects?',
+        options: [
+          [false, 'Ordinary', 'Internal tools, content, everyday business data.'],
+          [true, 'High', 'Money, health, personal data at scale or regulated services.'],
+        ],
+      },
+      offline: {
+        ask: 'Does it need to keep working after the person has left?',
+        options: [
+          [true, 'Yes', 'Stay signed in for days, or sync in the background.'],
+          [false, 'No', 'The session can end when the person closes it.'],
+        ],
+      },
+    },
+    flows: {
+      authorizationCode: {
+        name: 'Authorization code with PKCE',
+        summary:
+          'The application sends the person to the identity provider to sign in and gets back a one-time code, which it swaps for tokens. PKCE ties that code to the application that asked for it, so a stolen code is useless.',
+        steps: [
+          'The application sends the person to the identity provider.',
+          'The person signs in there. The application never sees the password.',
+          'The identity provider sends the person back with a one-time code.',
+          'The application swaps the code, together with its PKCE proof, for tokens.',
+        ],
+        tech: ['grant_type=authorization_code', 'response_type=code', 'code_challenge_method=S256', 'RFC 6749, RFC 7636'],
+      },
+      deviceCode: {
+        name: 'Device authorization',
+        summary:
+          'The device shows a short code and a web address. The person signs in on their phone or computer, and the device receives its tokens once they approve.',
+        steps: [
+          'The device asks the identity provider for a code.',
+          'It shows the code and a web address on screen.',
+          'The person opens that address on another device, signs in and types the code.',
+          'The device, which has been asking in the meantime, receives its tokens.',
+        ],
+        tech: ['grant_type=urn:ietf:params:oauth:grant-type:device_code', 'RFC 8628'],
+      },
+      clientCredentials: {
+        name: 'Client credentials',
+        summary:
+          'The service proves its own identity to the identity provider and receives a token for itself. No person is involved.',
+        steps: [
+          'The service proves who it is to the identity provider.',
+          'It receives a short-lived token of its own.',
+          'It calls the API with that token.',
+          'When the token expires, it asks for a new one.',
+        ],
+        tech: ['grant_type=client_credentials', 'RFC 6749, section 4.4'],
+      },
+      tokenExchange: {
+        name: 'Token exchange',
+        summary:
+          'The service hands in the token it received with the user request and gets a new one, limited to the next API. Each API can see which user it is and which service is calling.',
+        steps: [
+          'A user request reaches the service with a token.',
+          'The service sends that token to the identity provider, proving who it is.',
+          'It receives a new token for the next API, still tied to the user.',
+          'It calls the next API with the new token.',
+        ],
+        tech: [
+          'grant_type=urn:ietf:params:oauth:grant-type:token-exchange',
+          'RFC 8693',
+          'Not every identity provider supports it; check yours first.',
+        ],
+      },
+    },
+    client_: {
+      confidential: 'Register it as a confidential client: it runs where it can keep a credential out of reach.',
+      public: 'Register it as a public client, with no secret: anything shipped to a browser or a device can be read.',
+    },
+    clientAuth: {
+      secret: 'A client secret is enough here. Keep it in a vault and rotate it.',
+      key: 'Have it prove its identity with a private key (private_key_jwt) or a client certificate (mutual TLS), not with a shared secret.',
+    },
+    extras: {
+      bff: 'Keep the tokens on your server (the backend-for-frontend pattern). The browser holds only a session cookie.',
+      bffAdvised:
+        'Consider adding a small server to hold the tokens (backend for frontend). Tokens kept in the browser are within reach of any script that runs on the page.',
+      systemBrowser:
+        'Open the sign-in in the system browser, not in an embedded web view, and come back through a link only your application can claim.',
+      par: 'Send the sign-in request straight to the identity provider first (pushed authorization requests), so it cannot be altered in the browser.',
+      senderConstrained: 'Bind the tokens to the application with DPoP or mutual TLS, so a stolen token cannot be used elsewhere.',
+      refresh: 'Use refresh tokens to keep the session going without asking the person again.',
+      refreshRotation: 'Use refresh tokens that change on every use, so a stolen one is noticed.',
+      shortTokens: 'Keep access tokens short-lived.',
+    },
+    avoid: {
+      implicit: 'The implicit flow: it delivers tokens through the address bar.',
+      password: 'The password grant: the application would handle the password itself.',
+    },
+  },
+};
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <p><a href={routes.projects}>{t.back}</a></p>
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+  </header>
+
+  <div class="picker">
+    <div data-of="questions"></div>
+    <section class="pick-result" data-of="result" aria-live="polite" hidden></section>
+  </div>
+
+  <script type="application/json" id="of-text" set:html={JSON.stringify(t.client)} />
+  <ProjectNav current="oauth-flow-picker" demos />
+</Base>
+
+<script>
+  import { questionsFor, recommend, type Answers, type Question } from '../lib/oauth/picker';
+
+  type Option = [value: string | boolean, label: string, hint: string];
+
+  const text = JSON.parse(document.getElementById('of-text')!.textContent!);
+  const el = (name: string) => document.querySelector<HTMLElement>(`[data-of="${name}"]`)!;
+  const make = <K extends keyof HTMLElementTagNameMap>(tag: K, content?: string, className?: string) => {
+    const node = document.createElement(tag);
+    if (content !== undefined) node.textContent = content;
+    if (className) node.className = className;
+    return node;
+  };
+  const list = (tag: 'ul' | 'ol', items: string[], className?: string) => {
+    const node = make(tag, undefined, className);
+    node.append(...items.map((item) => make('li', item)));
+    return node;
+  };
+
+  const questions = el('questions');
+  const result = el('result');
+  let answers: Answers = {};
+
+  function answered(question: Question, option: Option) {
+    const row = make('div', undefined, 'pick-done');
+    row.dataset.question = question;
+    const change = make('button', text.change, 'pick-change');
+    change.type = 'button';
+    change.addEventListener('click', () => {
+      const path = questionsFor(answers);
+      for (const later of path.slice(path.indexOf(question))) delete answers[later];
+      render(true);
+    });
+    row.append(make('span', text.questions[question].ask), make('strong', option[1]), change);
+    return row;
+  }
+
+  function ask(question: Question) {
+    const group = make('fieldset', undefined, 'pick-ask');
+    group.dataset.question = question;
+    group.append(make('legend', text.questions[question].ask));
+    for (const option of text.questions[question].options as Option[]) {
+      const button = make('button', undefined, 'pick-option');
+      button.type = 'button';
+      button.dataset.value = String(option[0]);
+      button.append(make('strong', option[1]), make('span', option[2]));
+      button.addEventListener('click', () => {
+        (answers as Record<string, unknown>)[question] = option[0];
+        render(true);
+      });
+      group.append(button);
+    }
+    return group;
+  }
+
+  function renderResult() {
+    const found = recommend(answers);
+    result.hidden = !found;
+    if (!found) return;
+
+    const flow = text.flows[found.flow];
+    const setup = [
+      text.client_[found.client],
+      text.clientAuth[found.clientAuth],
+      ...found.extras.map((extra) => text.extras[extra]),
+    ].filter(Boolean);
+
+    const tech = make('details', undefined, 'tech');
+    tech.append(make('summary', text.tech), list('ul', flow.tech, 'pick-tech'));
+
+    const restart = make('button', text.restart, 'btn quiet');
+    restart.type = 'button';
+    restart.dataset.of = 'restart';
+    restart.addEventListener('click', () => {
+      answers = {};
+      render(true);
+    });
+
+    result.dataset.flow = found.flow;
+    result.replaceChildren(
+      make('p', text.resultLabel, 'pick-label'),
+      make('h2', flow.name),
+      make('p', flow.summary, 'pick-summary'),
+      make('h3', text.steps),
+      list('ol', flow.steps, 'pick-steps'),
+      make('h3', text.setup),
+      list('ul', setup, 'pick-list'),
+    );
+    if (found.avoid.length > 0) {
+      result.append(make('h3', text.avoidTitle), list('ul', found.avoid.map((item) => text.avoid[item]), 'pick-list avoid'));
+    }
+    result.append(tech, make('p', text.note, 'fine'), restart);
+  }
+
+  function render(focus = false) {
+    const nodes: HTMLElement[] = [];
+    for (const question of questionsFor(answers)) {
+      const value = answers[question];
+      if (value === undefined) {
+        nodes.push(ask(question));
+        break;
+      }
+      const option = (text.questions[question].options as Option[]).find((candidate) => candidate[0] === value)!;
+      nodes.push(answered(question, option));
+    }
+    questions.replaceChildren(...nodes);
+    renderResult();
+    if (!focus) return;
+    const target = result.hidden ? questions.querySelector<HTMLElement>('.pick-option') : result;
+    if (result.hidden) target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  render();
+</script>

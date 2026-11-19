@@ -1,0 +1,30 @@
+---
+import { existsSync } from 'node:fs';
+
+interface Props {
+  id: string;
+}
+
+const { id } = Astro.props;
+const has = existsSync(`public/videos/${id}.mp4`);
+---
+
+{
+  has && (
+    <video
+      class="preview"
+      data-preview
+      muted
+      loop
+      playsinline
+      preload="none"
+      poster={`/videos/${id}.jpg`}
+      width="960"
+      height="600"
+      aria-hidden="true"
+      tabindex="-1"
+    >
+      <source src={`/videos/${id}.mp4`} type="video/mp4" />
+    </video>
+  )
+}
