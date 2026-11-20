@@ -1,0 +1,388 @@
+---
+import Base from '../layouts/Base.astro';
+import ProjectNav from '../components/ProjectNav.astro';
+import { routes } from '../data/nav';
+import { RULES } from '../lib/amscript/migrate';
+import { TOKEN_SAMPLES } from '../lib/amscript/samples';
+import { SIZE_WARNING } from '../lib/amscript/token';
+
+const t = {
+  title: 'Ping AM access token scripts',
+  description:
+    'Write a Ping AM (ForgeRock AM) access token modification script and see the token it produces: what the API receives, what the client gets back and what introspection shows, on the legacy and the next-generation engine.',
+  lead: 'Before Ping AM, formerly ForgeRock AM, issues an OAuth 2.0 access token, a script can add, change or remove what goes in it. Write one here and see the token it produces: what an API receives, what the client gets back and what introspection shows. The script runs in your browser, on the legacy engine or the next-generation one.',
+  back: 'All projects',
+  examples: 'Examples',
+  engine: 'Scripting engine',
+  engines: { legacy: 'Legacy', next: 'Next-generation' },
+  script: 'The script',
+  convert: 'Convert to next-generation',
+  grantTitle: 'The token request',
+  grants: {
+    authorization_code: ['A user signs in', 'Authorization code grant, with a browser session'],
+    client_credentials: ['An application calls', 'Client credentials grant, no user'],
+    jwt_bearer: ['A JWT from another system', 'JWT bearer grant, for a subject AM does not know'],
+  },
+  personTitle: 'Who signs in',
+  people: { bjensen: ['Barbara Jensen', 'Email and phone number in the profile'], scarter: ['Sam Carter', 'No phone number in the profile'] },
+  resultTitle: 'What AM issues',
+  tokenTitle: 'The access token',
+  tokenHint: 'A client-side token: a signed JWT that APIs can read without calling AM. Highlighted: what the script added or changed.',
+  responseTitle: 'What the client gets back',
+  responseHint: 'The response of /oauth2/access_token. addExtraData() and addExtraJsonData() put values here, next to the token, not inside it.',
+  introspectionTitle: 'What introspection shows',
+  introspectionHint: 'The response of /oauth2/introspect for this token. Fields set with setField() appear here too.',
+  dataTitle: 'The data the script can read',
+  note: 'Based on Ping’s access token modification scripting API (PingAM 8.1). The token is not signed here, and AM is simulated in JavaScript, so check the script in AM before relying on it. The people, clients and services are made up.',
+  client: {
+    issued: 'AM issues the token.',
+    failed: 'AM cannot issue the token: the script failed, so the request ends with HTTP 500.',
+    atLine: 'Line {n}: {message}',
+    timeout: 'The script did not finish within 2 seconds. Look for a loop that never ends.',
+    crash: 'The script could not run: {message}',
+    running: 'Running the script…',
+    size: '{bytes} bytes',
+    sizeDelta: '{delta} bytes more than without the script',
+    sizeLess: '{delta} bytes less than without the script',
+    sizeWarn: 'Over {limit} bytes: tokens travel in an HTTP header, and many browsers, proxies and servers limit header size.',
+    added: 'added by the script',
+    changed: 'changed by the script',
+    removed: 'removed by the script',
+    native: 'Changing or removing what AM puts in the token can make it unusable: AM and APIs rely on these claims.',
+    profile: 'Profile changes',
+    saved: 'saved',
+    unsaved: 'not saved: store() was not called',
+    http: 'Calls to other services',
+    logs: 'Log',
+    converted: 'Converted to the next-generation engine:',
+    review: 'Review:',
+    parseError: 'The script is not valid JavaScript: {message}',
+    sizeLimit: SIZE_WARNING,
+  },
+};
+
+const first = TOKEN_SAMPLES[0];
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <p><a href={routes.projects}>{t.back}</a></p>
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+  </header>
+
+  <div class="debugger amscript tokens">
+    <div class="tk-top">
+      <div class="tk-controls">
+        <div>
+          <p class="sc-label" id="tk-examples">{t.examples}</p>
+          <div class="filter mg-examples" role="group" aria-labelledby="tk-examples">
+            {
+              TOKEN_SAMPLES.map((sample, index) => (
+                <button type="button" data-sample={sample.id} aria-pressed={String(index === 0)}>
+                  <strong>{sample.title}</strong>
+                  <span>{sample.summary}</span>
+                </button>
+              ))
+            }
+          </div>
+        </div>
+
+        <div class="tk-engine">
+          <p class="sc-label" id="tk-engine">{t.engine}</p>
+          <div class="filter" role="group" aria-labelledby="tk-engine">
+            <button type="button" data-engine="legacy" aria-pressed="true">{t.engines.legacy}</button>
+            <button type="button" data-engine="next" aria-pressed="false">{t.engines.next}</button>
+          </div>
+          <button type="button" class="btn quiet" data-tk="convert">{t.convert}</button>
+        </div>
+
+        <div>
+          <label for="tk-code">{t.script}</label>
+          <textarea id="tk-code" data-tk="code" rows="16" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off">{first.code}</textarea>
+          <div class="tk-conversion" data-tk="conversion" hidden></div>
+        </div>
+
+        <div>
+          <p class="sc-label" id="tk-grant">{t.grantTitle}</p>
+          <div class="filter op-people" role="group" aria-labelledby="tk-grant">
+            {
+              (Object.keys(t.grants) as (keyof typeof t.grants)[]).map((grant, index) => (
+                <button type="button" data-grant={grant} aria-pressed={String(index === 0)}>
+                  <strong>{t.grants[grant][0]}</strong>
+                  <span>{t.grants[grant][1]}</span>
+                </button>
+              ))
+            }
+          </div>
+        </div>
+
+        <div data-tk="people">
+          <p class="sc-label" id="tk-person">{t.personTitle}</p>
+          <div class="filter op-people" role="group" aria-labelledby="tk-person">
+            {
+              (Object.keys(t.people) as (keyof typeof t.people)[]).map((person, index) => (
+                <button type="button" data-person={person} aria-pressed={String(index === 0)}>
+                  <strong>{t.people[person][0]}</strong>
+                  <span>{t.people[person][1]}</span>
+                </button>
+              ))
+            }
+          </div>
+        </div>
+      </div>
+
+      <section class="tk-result" aria-live="polite">
+        <h2>{t.resultTitle}</h2>
+        <p class="status" data-tk="status" role="status">{t.client.running}</p>
+
+        <h3>{t.tokenTitle}</h3>
+        <p class="fine">{t.tokenHint}</p>
+        <p class="op-jwt"><code data-tk="jwt"></code></p>
+        <p class="tk-size" data-tk="size"></p>
+        <pre class="op-claims tk-claims" data-tk="claims"></pre>
+        <p class="fine tk-native" data-tk="native" hidden>{t.client.native}</p>
+        <div data-tk="effects"></div>
+      </section>
+    </div>
+
+    <h2>{t.responseTitle}</h2>
+    <p class="fine">{t.responseHint}</p>
+    <pre class="tk-http" data-tk="response"></pre>
+
+    <h2>{t.introspectionTitle}</h2>
+    <p class="fine">{t.introspectionHint}</p>
+    <pre class="tk-http" data-tk="introspection"></pre>
+
+    <details class="tech">
+      <summary>{t.dataTitle}</summary>
+      <pre data-tk="data"></pre>
+    </details>
+
+    <p class="fine sc-foot">{t.note}</p>
+  </div>
+
+  <script type="application/json" id="tk-text" set:html={JSON.stringify({ ...t.client, rules: RULES, samples: TOKEN_SAMPLES })} />
+  <ProjectNav current="ping-am-token-scripts" demos />
+</Base>
+
+<script>
+  import { migrate } from '../lib/amscript/migrate';
+  import { sandboxToken } from '../lib/amscript/sandbox';
+  import { tokenScenario, type TokenPerson } from '../lib/amscript/samples';
+  import type { Engine } from '../lib/amscript/common';
+  import type { Grant, TokenResult, TokenScenario } from '../lib/amscript/token';
+
+  const text = JSON.parse(document.getElementById('tk-text')!.textContent!);
+  const el = <T extends HTMLElement = HTMLElement>(name: string) => document.querySelector<T>(`[data-tk="${name}"]`)!;
+  const make = <K extends keyof HTMLElementTagNameMap>(tag: K, content?: string, className?: string) => {
+    const node = document.createElement(tag);
+    if (content !== undefined) node.textContent = content;
+    if (className) node.className = className;
+    return node;
+  };
+  const fill = (template: string, values: Record<string, string | number>) =>
+    template.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''));
+  const number = (value: number) => value.toLocaleString('en-GB');
+
+  const code = el<HTMLTextAreaElement>('code');
+  const state = { engine: 'legacy' as Engine, grant: 'authorization_code' as Grant, person: 'bjensen' as TokenPerson };
+  let run = 0;
+
+  function press(attribute: string, value: string) {
+    for (const button of document.querySelectorAll<HTMLButtonElement>(`[${attribute}]`)) {
+      button.setAttribute('aria-pressed', String(button.getAttribute(attribute) === value));
+    }
+  }
+
+  function claimLines(result: TokenResult) {
+    const entries = Object.entries(result.claims);
+    const lines: Node[] = ['{\n'];
+    entries.forEach(([key, value], index) => {
+      const line = make('span', `  ${JSON.stringify(key)}: ${JSON.stringify(value)}${index < entries.length - 1 || result.removed.length ? ',' : ''}`);
+      line.dataset.claim = key;
+      if (result.added.includes(key)) line.dataset.mark = 'added';
+      else if (result.changed.includes(key)) line.dataset.mark = 'changed';
+      if (line.dataset.mark) line.title = text[line.dataset.mark];
+      lines.push(line);
+    });
+    result.removed.forEach((key) => {
+      const line = make('span', `  ${JSON.stringify(key)}: ${JSON.stringify(result.native[key])}`);
+      line.dataset.mark = 'removed';
+      line.title = text.removed;
+      lines.push(line);
+    });
+    lines.push('}');
+    return lines;
+  }
+
+  function http(status: string, body: Record<string, unknown>, marked: string[]) {
+    const entries = Object.entries(body);
+    const lines: Node[] = [`${status}\nContent-Type: application/json\n\n{\n`];
+    entries.forEach(([key, value], index) => {
+      const shown = key === 'access_token' ? `${String(value).slice(0, 48)}…` : value;
+      const line = make('span', `  ${JSON.stringify(key)}: ${JSON.stringify(shown)}${index < entries.length - 1 ? ',' : ''}`);
+      if (marked.includes(key)) line.dataset.mark = 'added';
+      lines.push(line);
+    });
+    lines.push('}');
+    return lines;
+  }
+
+  function effects(result: TokenResult) {
+    const parts: Node[] = [];
+    const block = (title: string, rows: (string | Node)[]) => {
+      const section = make('div', undefined, 'mg-block');
+      const list = make('ul');
+      for (const row of rows) {
+        const item = make('li');
+        item.append(row);
+        list.append(item);
+      }
+      section.append(make('h4', title), list);
+      parts.push(section);
+    };
+    if (result.profile.length) {
+      block(
+        text.profile,
+        result.profile.map((change) => {
+          const row = make('span', `${change.attribute} = ${JSON.stringify(change.values)} · `);
+          row.append(make('span', change.saved ? text.saved : text.unsaved, change.saved ? 'mg-ok' : 'mg-bad'));
+          return row;
+        }),
+      );
+    }
+    if (result.http.length) block(text.http, result.http.map((call) => `${call.method} ${call.url} → ${call.status}`));
+    if (result.logs.length) block(text.logs, result.logs.map((line) => `${line.level.toUpperCase()} ${line.message}`));
+    el('effects').replaceChildren(...parts);
+  }
+
+  function render(result: TokenResult) {
+    const status = el('status');
+    if (result.status === 'error') {
+      status.replaceChildren(text.failed, make('br'), make('code', fill(text.atLine, { n: result.error!.line ?? '?', message: result.error!.message })));
+      status.dataset.state = 'error';
+    } else {
+      status.textContent = text.issued;
+      status.dataset.state = 'ok';
+    }
+    const [header, payload, signature] = result.jwt.split('.');
+    el('jwt').replaceChildren(
+      make('span', header, 'op-jwt-header'),
+      '.',
+      make('span', payload, 'op-jwt-payload'),
+      '.',
+      make('span', `${signature.slice(0, 43)}…`, 'op-jwt-signature'),
+    );
+    const delta = result.size - result.nativeSize;
+    const size = el('size');
+    size.replaceChildren(make('strong', fill(text.size, { bytes: number(result.size) })));
+    if (delta) size.append(' · ', fill(delta > 0 ? text.sizeDelta : text.sizeLess, { delta: number(Math.abs(delta)) }));
+    size.dataset.state = result.size > text.sizeLimit ? 'warn' : '';
+    if (result.size > text.sizeLimit) size.append(make('br'), fill(text.sizeWarn, { limit: number(text.sizeLimit) }));
+    el('claims').replaceChildren(...claimLines(result));
+    el('native').hidden = !result.changed.some((key) => key !== 'exp' && key !== 'expires_in') && !result.removed.length;
+    effects(result);
+
+    if (result.status === 'error') {
+      el('response').textContent = 'HTTP/1.1 500 Internal Server Error';
+      el('introspection').textContent = '—';
+    } else {
+      el('response').replaceChildren(...http('HTTP/1.1 200 OK', result.response, Object.keys(result.extra)));
+      el('introspection').replaceChildren(...http('HTTP/1.1 200 OK', result.introspection, result.added));
+    }
+  }
+
+  function scenario(): TokenScenario {
+    return tokenScenario(state.grant, state.person, Math.floor(Date.now() / 1000));
+  }
+
+  async function execute() {
+    const id = ++run;
+    const data = scenario();
+    el('data').textContent = JSON.stringify(
+      { identity: data.user, session: data.session, scopes: data.scopes, clientProperties: data.client, requestProperties: { requestParams: data.requestParams, requestHeaders: data.requestHeaders }, services: data.http },
+      null,
+      2,
+    );
+    const outcome = await sandboxToken(code.value, state.engine, data);
+    if (id !== run) return;
+    if (!outcome.ok) {
+      const status = el('status');
+      status.textContent = outcome.reason === 'timeout' ? text.timeout : fill(text.crash, { message: outcome.message ?? '' });
+      status.dataset.state = 'error';
+      return;
+    }
+    render(outcome.result);
+  }
+
+  function setEngine(engine: Engine) {
+    state.engine = engine;
+    press('data-engine', engine);
+    el('convert').hidden = engine === 'next';
+  }
+
+  function convert() {
+    const migration = migrate(code.value, 'token');
+    const box = el('conversion');
+    if (migration.error) {
+      box.replaceChildren(make('p', fill(text.parseError, { message: migration.error })));
+      box.hidden = false;
+      return;
+    }
+    code.value = migration.code;
+    setEngine('next');
+    const titles = [...new Set(migration.changes.map((change) => text.rules[change.rule].title))];
+    const list = make('ul');
+    for (const title of titles) list.append(make('li', title));
+    const parts: Node[] = [make('p', text.converted), list];
+    if (migration.warnings.length) {
+      const review = make('ul');
+      for (const warning of migration.warnings) review.append(make('li', warning.message));
+      parts.push(make('p', text.review), review);
+    }
+    box.replaceChildren(...parts);
+    box.hidden = false;
+    execute();
+  }
+
+  let timer: ReturnType<typeof setTimeout>;
+  code.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(execute, 250);
+    press('data-sample', '');
+  });
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-sample]')) {
+    button.addEventListener('click', () => {
+      code.value = text.samples.find((sample: { id: string }) => sample.id === button.dataset.sample).code;
+      press('data-sample', button.dataset.sample!);
+      el('conversion').hidden = true;
+      setEngine('legacy');
+      execute();
+    });
+  }
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-engine]')) {
+    button.addEventListener('click', () => {
+      setEngine(button.dataset.engine as Engine);
+      execute();
+    });
+  }
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-grant]')) {
+    button.addEventListener('click', () => {
+      state.grant = button.dataset.grant as Grant;
+      press('data-grant', state.grant);
+      el('people').hidden = state.grant !== 'authorization_code';
+      execute();
+    });
+  }
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-person]')) {
+    button.addEventListener('click', () => {
+      state.person = button.dataset.person as TokenPerson;
+      press('data-person', state.person);
+      execute();
+    });
+  }
+  el('convert').addEventListener('click', convert);
+
+  execute();
+</script>

@@ -2728,3 +2728,336 @@ li[data-state='error'] .sv-name {
 .op-legend {
   margin-top: 0.4rem;
 }
+
+/* Ping AM scripts */
+.debugger.amscript {
+  max-width: none;
+}
+.amscript .filter {
+  margin-bottom: 1.25rem;
+}
+.mg-examples button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  max-width: 21rem;
+  border-radius: 12px;
+  text-align: left;
+}
+.mg-examples button span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.mg-examples button[aria-pressed='true'] span,
+.op-people button[aria-pressed='true'] span {
+  color: color-mix(in srgb, var(--btn-ink) 70%, transparent);
+}
+.mg-pair {
+  display: grid;
+  gap: 1.5rem;
+}
+.mg-pair label,
+.mg-title {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-weight: 550;
+}
+.mg-pair textarea {
+  min-height: 30rem;
+}
+.mg-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  margin-bottom: 0.4rem;
+}
+.mg-head .mg-title {
+  margin: 0;
+}
+.mg-head .filter {
+  margin: 0;
+}
+.mg-head .filter button {
+  padding: 0.2rem 0.7rem;
+  font-size: 0.82rem;
+}
+.mg-copy {
+  margin-left: auto;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.85rem;
+}
+.debugger .mg-code {
+  margin: 0;
+  min-height: 30rem;
+  max-height: 46rem;
+  overflow: auto;
+  white-space: pre;
+  font-size: 0.82rem;
+}
+.mg-code span {
+  display: block;
+  min-height: 1.27em;
+}
+.mg-code [data-op='add'] {
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+}
+.mg-code [data-op='del'] {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+}
+@media (min-width: 960px) {
+  .mg-pair {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.mg-notes {
+  display: grid;
+  gap: 0 2.5rem;
+}
+@media (min-width: 960px) {
+  .mg-notes:has([data-mg='warnings-block']:not([hidden])) {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  }
+}
+.mg-changes,
+.mg-warnings,
+.mg-block ul,
+.tk-conversion ul {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mg-changes li,
+.mg-warnings li {
+  display: grid;
+  gap: 0.15rem;
+  max-width: 62ch;
+}
+.mg-changes span:not(.mg-lines),
+.mg-warnings span:not(.mg-lines) {
+  color: var(--muted);
+}
+.mg-lines {
+  font: 0.78rem var(--mono);
+  color: var(--accent-2);
+}
+.mg-warnings li {
+  padding-left: 0.9rem;
+  border-left: 3px solid var(--warn);
+}
+.mg-warnings span:not(.mg-lines) {
+  color: var(--ink);
+}
+.amscript details textarea {
+  margin-top: 0.75rem;
+}
+.amscript h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1.05rem;
+}
+.amscript h4 {
+  margin: 1rem 0 0.4rem;
+  color: var(--muted);
+  font: 500 0.85rem var(--sans);
+}
+.mg-ask {
+  margin-top: 1.5rem;
+  padding: 1.1rem 1.25rem;
+  max-width: 34rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.mg-fields {
+  display: grid;
+  gap: 0.9rem;
+  margin: 1rem 0 1.25rem;
+}
+.mg-field {
+  display: grid;
+  gap: 0.35rem;
+}
+.mg-field label {
+  font-weight: 550;
+  font-size: 0.92rem;
+}
+.mg-field input,
+.mg-field select {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 0.95rem var(--sans);
+}
+.mg-field input:focus,
+.mg-field select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.mg-message {
+  margin: 0;
+  color: var(--muted);
+}
+.mg-results {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+.mg-results > section {
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  min-width: 0;
+}
+@media (min-width: 960px) {
+  .mg-results {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.mg-outcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.7rem;
+  margin: 0;
+}
+.mg-outcome code {
+  font: 600 1.35rem var(--mono);
+  color: var(--ok);
+}
+.mg-outcome[data-status='error'] strong {
+  color: var(--danger);
+}
+.mg-outcome[data-status='error'] span {
+  font: 0.85rem var(--mono);
+  overflow-wrap: anywhere;
+}
+.mg-outcome[data-status='callbacks'] strong {
+  color: var(--accent-2);
+}
+.mg-block li {
+  font: 0.8rem/1.5 var(--mono);
+  overflow-wrap: anywhere;
+}
+.mg-block ul {
+  gap: 0.3rem;
+}
+.mg-none {
+  color: var(--muted);
+}
+.mg-ok {
+  color: var(--ok);
+}
+.mg-bad {
+  color: var(--danger);
+}
+.mg-error {
+  color: var(--danger);
+}
+.tk-controls {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.tk-controls label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-weight: 550;
+}
+.tk-controls textarea {
+  min-height: 19rem;
+}
+.tk-engine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+.tk-engine .sc-label {
+  flex-basis: 100%;
+  margin: 0;
+}
+.tk-engine .filter {
+  margin: 0;
+}
+.tk-engine .btn {
+  padding: 0.35rem 0.95rem;
+  font-size: 0.88rem;
+}
+.tk-conversion {
+  margin-top: 0.75rem;
+  padding: 0.8rem 1rem;
+  border-left: 3px solid var(--accent-2);
+  background: var(--surface);
+  font-size: 0.9rem;
+}
+.tk-conversion p {
+  margin: 0 0 0.4rem;
+}
+.tk-conversion ul {
+  gap: 0.2rem;
+  margin-bottom: 0.6rem;
+  padding-left: 1.1rem;
+  list-style: disc;
+}
+.tk-result {
+  min-width: 0;
+}
+.tk-result h3 {
+  margin-top: 1.5rem;
+}
+.tk-result .status code {
+  font-size: 0.82rem;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.tk-size {
+  margin: 0 0 0.4rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.tk-size strong {
+  color: var(--ink);
+}
+.tk-size[data-state='warn'] {
+  color: var(--warn);
+}
+.tk-claims span[data-mark='added'],
+.tk-http span[data-mark='added'] {
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+}
+.tk-claims span[data-mark='changed'] {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+}
+.tk-claims span[data-mark='removed'] {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  text-decoration: line-through;
+}
+.tk-native {
+  color: var(--warn);
+}
+.debugger .tk-http {
+  overflow-x: auto;
+  white-space: pre;
+  max-width: 54rem;
+}
+.tk-http span {
+  display: block;
+}
+@media (min-width: 960px) {
+  .tk-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 2.5rem;
+    align-items: start;
+  }
+  .tk-result > h2:first-child {
+    margin-top: 0;
+  }
+}

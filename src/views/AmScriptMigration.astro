@@ -1,0 +1,476 @@
+---
+import Base from '../layouts/Base.astro';
+import ProjectNav from '../components/ProjectNav.astro';
+import { routes } from '../data/nav';
+import { RULES } from '../lib/amscript/migrate';
+import { NODE_SAMPLES } from '../lib/amscript/samples';
+
+const t = {
+  title: 'Ping AM script migration',
+  description:
+    'Convert a legacy Ping AM (ForgeRock AM) Scripted Decision node script to the next-generation engine, see every change explained, and run both versions side by side to check they behave the same.',
+  lead: 'Ping AM, formerly ForgeRock AM, runs journey scripts on two engines. Scripts written for the legacy one do not run on the next-generation engine as they are: the bindings changed. Paste a legacy Scripted Decision node script to get the next-generation version, with every change explained, then run both and check they do the same thing.',
+  back: 'All projects',
+  examples: 'Examples',
+  legacy: 'Legacy script',
+  next: 'Next-generation script',
+  views: { code: 'New script', diff: 'Differences' },
+  copy: 'Copy',
+  copied: 'Copied',
+  changesTitle: 'What changed and why',
+  warningsTitle: 'Review before using it',
+  runTitle: 'Run both versions',
+  runHint:
+    'Both scripts run in your browser with the same journey state, user profile and request. Calls to other services get the answers set in the test data, and nothing leaves the page.',
+  data: 'Test data',
+  dataHint: 'The node’s outcomes, the journey state before the node, the user profiles, the request and the answers of external services.',
+  run: 'Run both scripts',
+  note: 'The conversion follows Ping’s guide to migrating decision node scripts (PingAM 8.1). Both engines are simulated in JavaScript with the bindings each one offers, so check the converted script in AM before relying on it. The example scripts are made up.',
+  client: {
+    changes: { one: '1 change', many: '{n} changes' },
+    warnings: { none: 'nothing to review', one: '1 thing to review', many: '{n} things to review' },
+    lines: { one: 'Line {lines}', many: 'Lines {lines}' },
+    before: 'Line {n} of the legacy script',
+    after: 'Line {n} of the new script',
+    parseError: 'The legacy script is not valid JavaScript: {message}',
+    nothing: 'Nothing to convert: the script already looks like a next-generation script.',
+    dataError: 'The test data is not valid JSON: {message}',
+    running: 'Running both scripts…',
+    asks: 'The node asks the user for input',
+    asksHint: 'Both scripts stop here and send callbacks. Answer them to run the second pass, as AM does when the user submits the page.',
+    send: 'Send the answers',
+    same: 'Both versions did the same thing.',
+    differ: 'The versions did different things: {aspects}.',
+    aspects: {
+      result: 'the result',
+      callbacks: 'the callbacks sent',
+      state: 'the journey state',
+      profile: 'the profile changes',
+      http: 'the calls to other services',
+      logs: 'the log',
+      messages: 'the messages and session properties',
+    },
+    outcome: 'Outcome',
+    callbacks: 'Callbacks sent',
+    state: 'Journey state written',
+    profile: 'Profile changes',
+    saved: 'saved',
+    unsaved: 'not saved: store() was not called',
+    http: 'Calls to other services',
+    noMock: 'no answer set in the test data',
+    logs: 'Log',
+    messages: 'Messages and session properties',
+    failed: 'The script failed',
+    atLine: 'at line {n}',
+    timeout: 'The script did not finish within 2 seconds. Look for a loop that never ends.',
+    crash: 'The script could not run: {message}',
+    waiting: 'Waiting for the user',
+    none: 'Nothing',
+    types: {
+      name: 'Name',
+      password: 'Password',
+      textInput: 'Text',
+      textOutput: 'Message',
+      choice: 'Choice',
+      confirmation: 'Confirmation',
+      hidden: 'Hidden value',
+      scriptTextOutput: 'Script',
+    },
+    engines: { legacy: 'Legacy', next: 'Next-generation' },
+  },
+};
+
+const first = NODE_SAMPLES[0];
+const samples = NODE_SAMPLES.map(({ id, code, scenario, answers }) => ({ id, code, scenario, answers }));
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <p><a href={routes.projects}>{t.back}</a></p>
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+  </header>
+
+  <div class="debugger amscript migration">
+    <p class="sc-label" id="mg-examples">{t.examples}</p>
+    <div class="filter mg-examples" role="group" aria-labelledby="mg-examples">
+      {
+        NODE_SAMPLES.map((sample, index) => (
+          <button type="button" data-sample={sample.id} aria-pressed={String(index === 0)}>
+            <strong>{sample.title}</strong>
+            <span>{sample.summary}</span>
+          </button>
+        ))
+      }
+    </div>
+
+    <div class="mg-pair">
+      <div>
+        <label for="mg-legacy">{t.legacy}</label>
+        <textarea id="mg-legacy" data-mg="legacy" rows="24" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off">{first.code}</textarea>
+      </div>
+      <div>
+        <div class="mg-head">
+          <span class="mg-title" id="mg-next">{t.next}</span>
+          <div class="filter mg-views" role="group" aria-labelledby="mg-next">
+            <button type="button" data-view="code" aria-pressed="true">{t.views.code}</button>
+            <button type="button" data-view="diff" aria-pressed="false">{t.views.diff}</button>
+          </div>
+          <button type="button" class="btn quiet mg-copy" data-mg="copy">{t.copy}</button>
+        </div>
+        <pre class="mg-code" data-mg="code" aria-labelledby="mg-next"></pre>
+      </div>
+    </div>
+    <p class="status" data-mg="summary" role="status"></p>
+
+    <section class="mg-notes">
+      <div>
+        <h2>{t.changesTitle}</h2>
+        <ul class="mg-changes" data-mg="changes"></ul>
+      </div>
+      <div data-mg="warnings-block" hidden>
+        <h2>{t.warningsTitle}</h2>
+        <ul class="mg-warnings" data-mg="warnings"></ul>
+      </div>
+    </section>
+
+    <h2>{t.runTitle}</h2>
+    <p class="fine">{t.runHint}</p>
+    <details class="tech">
+      <summary>{t.data}</summary>
+      <p class="fine">{t.dataHint}</p>
+      <textarea data-mg="scenario" aria-label={t.data} rows="16" spellcheck="false" autocomplete="off" autocapitalize="off">{JSON.stringify(first.scenario, null, 2)}</textarea>
+    </details>
+    <div class="debugger-buttons">
+      <button type="button" class="btn" data-mg="run">{t.run}</button>
+    </div>
+    <p class="status" data-mg="verdict" role="status"></p>
+
+    <form class="mg-ask" data-mg="ask" hidden>
+      <h3>{t.client.asks}</h3>
+      <p class="fine">{t.client.asksHint}</p>
+      <div class="mg-fields" data-mg="fields"></div>
+      <button type="submit" class="btn">{t.client.send}</button>
+    </form>
+
+    <div class="mg-results" data-mg="results" hidden>
+      <section data-engine="legacy" aria-label={t.client.engines.legacy}><h3>{t.client.engines.legacy}</h3><div data-mg="result-legacy"></div></section>
+      <section data-engine="next" aria-label={t.client.engines.next}><h3>{t.client.engines.next}</h3><div data-mg="result-next"></div></section>
+    </div>
+
+    <p class="fine sc-foot">{t.note}</p>
+  </div>
+
+  <script type="application/json" id="mg-text" set:html={JSON.stringify({ ...t.client, copy: t.copy, copied: t.copied, rules: RULES, samples })} />
+  <ProjectNav current="ping-am-script-migration" demos />
+</Base>
+
+<script>
+  import { lineDiff } from '../lib/journey/diff';
+  import { migrate, type Migration } from '../lib/amscript/migrate';
+  import { differences, type Answer, type CallbackRequest, type NodeResult, type NodeScenario } from '../lib/amscript/node';
+  import { sandboxNode, type Outcome } from '../lib/amscript/sandbox';
+
+  const text = JSON.parse(document.getElementById('mg-text')!.textContent!);
+  const el = <T extends HTMLElement = HTMLElement>(name: string) => document.querySelector<T>(`[data-mg="${name}"]`)!;
+  const make = <K extends keyof HTMLElementTagNameMap>(tag: K, content?: string, className?: string) => {
+    const node = document.createElement(tag);
+    if (content !== undefined) node.textContent = content;
+    if (className) node.className = className;
+    return node;
+  };
+  const fill = (template: string, values: Record<string, string | number>) =>
+    template.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''));
+  const count = (forms: { one: string; many: string; none?: string }, n: number) =>
+    n === 0 && forms.none ? forms.none : fill(n === 1 ? forms.one : forms.many, { n });
+
+  const legacy = el<HTMLTextAreaElement>('legacy');
+  const scenarioInput = el<HTMLTextAreaElement>('scenario');
+  let view: 'code' | 'diff' = 'code';
+  let migration: Migration = migrate(legacy.value);
+  let pending: { scenario: NodeScenario; code: { legacy: string; next: string }; sent: { legacy: CallbackRequest[]; next: CallbackRequest[] } } | undefined;
+  let answers: Answer[] | undefined;
+
+  function renderCode() {
+    const pre = el('code');
+    if (view === 'code') {
+      const kept = new Set<string>(legacy.value.split('\n'));
+      pre.replaceChildren(
+        ...migration.code.split('\n').map((line) => {
+          const row = make('span', line || ' ');
+          row.dataset.op = kept.has(line) || !line.trim() ? 'same' : 'add';
+          return row;
+        }),
+      );
+    } else {
+      pre.replaceChildren(
+        ...lineDiff(legacy.value, migration.code).map((line) => {
+          const row = make('span', `${line.op} ${line.text}`);
+          row.dataset.op = line.op === '+' ? 'add' : line.op === '-' ? 'del' : 'same';
+          return row;
+        }),
+      );
+    }
+  }
+
+  function renderMigration() {
+    migration = migrate(legacy.value);
+    renderCode();
+    const summary = el('summary');
+    if (migration.error) {
+      summary.textContent = fill(text.parseError, { message: migration.error });
+      summary.dataset.state = 'error';
+    } else if (!migration.changes.length && !migration.warnings.length) {
+      summary.textContent = text.nothing;
+      summary.dataset.state = '';
+    } else {
+      summary.textContent = `${count(text.changes, migration.changes.length)}, ${count(text.warnings, migration.warnings.length)}.`;
+      summary.dataset.state = migration.warnings.length ? 'warn' : 'ok';
+    }
+
+    const groups = new Map<string, number[]>();
+    for (const change of migration.changes) groups.set(change.rule, [...(groups.get(change.rule) ?? []), change.line]);
+    el('changes').replaceChildren(
+      ...[...groups].map(([rule, lines]) => {
+        const item = make('li');
+        const unique = [...new Set(lines)];
+        item.append(
+          make('strong', text.rules[rule].title),
+          make('span', text.rules[rule].detail),
+          make('span', fill(unique.length === 1 ? text.lines.one : text.lines.many, { lines: unique.join(', ') }), 'mg-lines'),
+        );
+        return item;
+      }),
+    );
+    el('warnings-block').hidden = !migration.warnings.length;
+    el('warnings').replaceChildren(
+      ...migration.warnings.map((warning) => {
+        const item = make('li');
+        item.append(make('span', fill(warning.side === 'before' ? text.before : text.after, { n: warning.line }), 'mg-lines'), make('span', warning.message));
+        return item;
+      }),
+    );
+  }
+
+  function scenario(): NodeScenario | undefined {
+    try {
+      return JSON.parse(scenarioInput.value);
+    } catch (error) {
+      el('verdict').textContent = fill(text.dataError, { message: (error as Error).message });
+      el('verdict').dataset.state = 'error';
+      return undefined;
+    }
+  }
+
+  const show = (value: unknown) => JSON.stringify(value);
+
+  function block(title: string, rows: (string | Node)[]) {
+    const section = make('div', undefined, 'mg-block');
+    section.append(make('h4', title));
+    const list = make('ul');
+    if (!rows.length) list.append(make('li', text.none, 'mg-none'));
+    for (const row of rows) {
+      const item = make('li');
+      item.append(row);
+      list.append(item);
+    }
+    section.append(list);
+    return section;
+  }
+
+  function renderResult(outcome: Outcome<NodeResult>, target: HTMLElement) {
+    if (!outcome.ok) {
+      target.replaceChildren(make('p', outcome.reason === 'timeout' ? text.timeout : fill(text.crash, { message: outcome.message ?? '' }), 'mg-error'));
+      return;
+    }
+    const result = outcome.result;
+    const head = make('p', undefined, 'mg-outcome');
+    head.dataset.status = result.status;
+    if (result.status === 'error') {
+      head.append(make('strong', text.failed), make('span', `${result.error!.message}${result.error!.line ? ` (${fill(text.atLine, { n: result.error!.line })})` : ''}`));
+    } else if (result.status === 'callbacks') {
+      head.append(make('strong', text.waiting));
+    } else {
+      head.append(make('span', text.outcome), make('code', result.outcome!));
+    }
+    const parts: Node[] = [head];
+    if (result.callbacks.length) {
+      parts.push(
+        block(
+          text.callbacks,
+          result.callbacks.map(
+            (callback) => `${text.types[callback.type]}: ${callback.prompt ?? callback.message ?? callback.id ?? ''}${callback.choices ? ` (${callback.choices.join(', ')})` : ''}`,
+          ),
+        ),
+      );
+    }
+    parts.push(block(text.state, result.writes.map((write) => `${write.state} · ${write.key} = ${show(write.value)}`)));
+    if (result.profile.length) {
+      parts.push(
+        block(
+          text.profile,
+          result.profile.map((change) => {
+            const row = make('span', `${change.user} · ${change.attribute} = ${show(change.values)} · `);
+            row.append(make('span', change.saved ? text.saved : text.unsaved, change.saved ? 'mg-ok' : 'mg-bad'));
+            return row;
+          }),
+        ),
+      );
+    }
+    if (result.http.length) {
+      parts.push(block(text.http, result.http.map((call) => `${call.method} ${call.url} → ${call.status}${call.matched ? '' : ` (${text.noMock})`}`)));
+    }
+    const messages = [...Object.entries(result.messages), ...Object.entries(result.sessionProperties)];
+    if (messages.length) parts.push(block(text.messages, messages.map(([key, value]) => `${key}: ${value}`)));
+    if (result.logs.length) parts.push(block(text.logs, result.logs.map((line) => `${line.level.toUpperCase()} ${line.message}`)));
+    target.replaceChildren(...parts);
+  }
+
+  function askFor(callbacks: CallbackRequest[], defaults: Answer[] | undefined) {
+    const fields = callbacks.map((callback, index) => {
+      const wrap = make('div', undefined, 'mg-field');
+      const id = `mg-answer-${index}`;
+      const value = defaults?.[index];
+      if (callback.type === 'textOutput' || callback.type === 'scriptTextOutput') {
+        wrap.append(make('p', callback.message ?? '', 'mg-message'));
+        return wrap;
+      }
+      const label = make('label', callback.prompt ?? callback.id ?? text.types[callback.type]);
+      label.htmlFor = id;
+      wrap.append(label);
+      if (callback.type === 'choice' || callback.type === 'confirmation') {
+        const select = make('select');
+        select.id = id;
+        select.dataset.answer = String(index);
+        select.multiple = Boolean(callback.multiple);
+        const chosen = Array.isArray(value) ? value : value !== undefined && value !== null ? [Number(value)] : [callback.defaultChoice ?? 0];
+        (callback.choices ?? []).forEach((choice, option) => {
+          const item = make('option', choice);
+          item.value = String(option);
+          item.selected = chosen.includes(option);
+          select.append(item);
+        });
+        wrap.append(select);
+      } else {
+        const input = make('input');
+        input.id = id;
+        input.dataset.answer = String(index);
+        input.type = callback.type === 'password' && !callback.echoOn ? 'password' : 'text';
+        input.autocomplete = 'off';
+        input.value = typeof value === 'string' ? value : (callback.defaultValue ?? callback.value ?? '');
+        wrap.append(input);
+      }
+      return wrap;
+    });
+    el('fields').replaceChildren(...fields);
+    el('ask').hidden = false;
+  }
+
+  function collectAnswers(callbacks: CallbackRequest[]): Answer[] {
+    return callbacks.map((callback, index) => {
+      const field = document.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-answer="${index}"]`);
+      if (!field) return null;
+      if (field instanceof HTMLSelectElement) {
+        const picked = [...field.selectedOptions].map((option) => Number(option.value));
+        return callback.type === 'confirmation' ? (picked[0] ?? 0) : picked;
+      }
+      return field.value;
+    });
+  }
+
+  function verdict(legacyRun: Outcome<NodeResult>, nextRun: Outcome<NodeResult>) {
+    const status = el('verdict');
+    if (!legacyRun.ok || !nextRun.ok) {
+      status.textContent = '';
+      return;
+    }
+    const aspects = differences(legacyRun.result, nextRun.result);
+    status.textContent = aspects.length ? fill(text.differ, { aspects: aspects.map((aspect) => text.aspects[aspect]).join(', ') }) : text.same;
+    status.dataset.state = aspects.length ? 'warn' : 'ok';
+  }
+
+  async function run(withAnswers?: Answer[]) {
+    const data = withAnswers ? pending?.scenario : scenario();
+    if (!data) return;
+    const code = withAnswers && pending ? pending.code : { legacy: legacy.value, next: migration.code };
+    el('verdict').textContent = text.running;
+    el('verdict').dataset.state = '';
+    el<HTMLButtonElement>('run').disabled = true;
+    const [legacyRun, nextRun] = await Promise.all([
+      sandboxNode(code.legacy, 'legacy', data, withAnswers, withAnswers ? pending?.sent.legacy : undefined),
+      sandboxNode(code.next, 'next', data, withAnswers, withAnswers ? pending?.sent.next : undefined),
+    ]);
+    el<HTMLButtonElement>('run').disabled = false;
+    el('results').hidden = false;
+    renderResult(legacyRun, el('result-legacy'));
+    renderResult(nextRun, el('result-next'));
+    verdict(legacyRun, nextRun);
+
+    const waiting = [legacyRun, nextRun].find((item) => item.ok && item.result.status === 'callbacks');
+    if (!withAnswers && waiting?.ok) {
+      pending = {
+        scenario: data,
+        code,
+        sent: {
+          legacy: legacyRun.ok ? legacyRun.result.callbacks : [],
+          next: nextRun.ok ? nextRun.result.callbacks : [],
+        },
+      };
+      askFor(waiting.result.callbacks, answers);
+    } else {
+      el('ask').hidden = true;
+    }
+  }
+
+  function loadSample(id: string) {
+    const sample = text.samples.find((item: { id: string }) => item.id === id);
+    legacy.value = sample.code;
+    scenarioInput.value = JSON.stringify(sample.scenario, null, 2);
+    answers = sample.answers;
+    pending = undefined;
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-sample]')) {
+      button.setAttribute('aria-pressed', String(button.dataset.sample === id));
+    }
+    el('results').hidden = true;
+    el('ask').hidden = true;
+    el('verdict').textContent = '';
+    renderMigration();
+  }
+
+  let timer: ReturnType<typeof setTimeout>;
+  legacy.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(renderMigration, 200);
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-sample]')) button.setAttribute('aria-pressed', 'false');
+  });
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-sample]')) {
+    button.addEventListener('click', () => loadSample(button.dataset.sample!));
+  }
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-view]')) {
+    button.addEventListener('click', () => {
+      view = button.dataset.view as typeof view;
+      for (const other of document.querySelectorAll<HTMLButtonElement>('[data-view]')) other.setAttribute('aria-pressed', String(other === button));
+      renderCode();
+    });
+  }
+  el('copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(migration.code);
+      el('copy').textContent = text.copied;
+      setTimeout(() => (el('copy').textContent = text.copy), 1500);
+    } catch {
+      /* the clipboard may be blocked; the code can still be selected */
+    }
+  });
+  el('run').addEventListener('click', () => run());
+  el('ask').addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!pending) return;
+    const callbacks = pending.sent.legacy.length ? pending.sent.legacy : pending.sent.next;
+    answers = collectAnswers(callbacks);
+    run(answers);
+  });
+
+  answers = text.samples[0].answers;
+  renderMigration();
+</script>
