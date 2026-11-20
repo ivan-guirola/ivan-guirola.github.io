@@ -7,6 +7,7 @@ date: 2026-11-20
 demo: https://ivan-guirola.github.io/tools/am-script-migration/
 repo: https://github.com/ivan-guirola/ivan-guirola.github.io/tree/main/src/lib/amscript
 featured: true
+inDevelopment: true
 ---
 
 Journeys in Ping AM, formerly ForgeRock AM, often include scripts that decide which way the user goes. Many of them were written for the legacy scripting engine, and they do not run on the next-generation engine as they are: the Action class, sharedState, the way callbacks are sent and read, the HTTP client and the profile methods all changed.

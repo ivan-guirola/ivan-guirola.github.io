@@ -11,7 +11,12 @@ interface Props {
 const { entry } = Astro.props;
 const { Content } = await render(entry);
 
-const t = { back: 'All projects', repo: 'Code', demo: 'Live demo' };
+const t = {
+  back: 'All projects',
+  repo: 'Code',
+  demo: 'Live demo',
+  inDevelopment: 'In development: this project still has to be validated against the real product. Treat its results with care.',
+};
 
 ---
 
@@ -19,6 +24,7 @@ const t = { back: 'All projects', repo: 'Code', demo: 'Live demo' };
   <header class="page-head">
     <p><a href={routes.projects}>{t.back}</a></p>
     <h1>{entry.data.title}</h1>
+    {entry.data.inDevelopment && <p class="notice">{t.inDevelopment}</p>}
     <p>{entry.data.summary}</p>
     <ul class="tags">
       <li>{categoryLabels[entry.data.category]}</li>

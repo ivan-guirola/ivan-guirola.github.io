@@ -3061,3 +3061,24 @@ li[data-state='error'] .sv-name {
     margin-top: 0;
   }
 }
+
+/* Projects still being validated */
+.badge-dev {
+  display: table;
+  margin-top: 0.45rem;
+  padding: 0.05rem 0.5rem;
+  border: 1px solid var(--warn);
+  border-radius: 999px;
+  color: var(--warn);
+  font-size: 0.72rem;
+  letter-spacing: 0;
+  text-transform: none;
+  vertical-align: 0.05em;
+}
+.page-head .notice {
+  max-width: 62ch;
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  color: var(--warn);
+  font-size: 0.92rem;
+}

@@ -15,6 +15,7 @@ const projects = defineCollection({
     demo: z.url().optional(),
     featured: z.boolean().default(false),
     draft: z.boolean().default(false),
+    inDevelopment: z.boolean().default(false),
   }),
 });
 
