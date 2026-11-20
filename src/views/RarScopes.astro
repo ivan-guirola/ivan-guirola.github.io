@@ -1,0 +1,224 @@
+---
+import Base from '../layouts/Base.astro';
+import ProjectNav from '../components/ProjectNav.astro';
+import { routes } from '../data/nav';
+import { APPROACHES, OTHER } from '../lib/rar/payment';
+
+const t = {
+  title: 'Scopes vs RAR for payments',
+  description:
+    'Compare how an app asks a bank for permission to make a payment: an OAuth scope, the PSD2 Berlin Group approach and rich authorization requests under FAPI 2.0.',
+  lead: 'When an app pays from your bank account, the bank has to know what you agreed to. Laura pays 45.00 EUR to Example Store from her bank. Pick how the store asks for permission to see every call, what Laura approves and what the token allows.',
+  back: 'All projects',
+  approachLabel: 'How the store asks',
+  approaches: { scope: 'Scope only', psd2: 'PSD2 (Berlin Group)', rar: 'Rich authorization request' },
+  consentTitle: 'What Laura sees at her bank',
+  callsTitle: 'The calls',
+  tokenTitle: 'The token the store gets',
+  misuseTitle: 'What if the store tries another payment?',
+  misuseButton: `Try ${Number(OTHER.amount).toLocaleString('en-GB', { minimumFractionDigits: 2 })} EUR to another account`,
+  compareTitle: 'Side by side',
+  compare: {
+    head: ['', 'Scope only', 'PSD2 (Berlin Group)', 'Rich authorization request'],
+    rows: [
+      ['What Laura approves', 'Payments in general', 'This payment', 'This payment'],
+      ['Where the payment details go', 'Only in the payment call', 'In a payment created before she signs in', 'In the authorization request'],
+      ['What the token allows', 'Any payment', 'The payment with that id', 'That amount, to that payee'],
+      ['Standard', 'OAuth 2.0 scope', 'Berlin Group NextGenPSD2', 'RFC 9396, recommended by FAPI 2.0'],
+    ],
+  },
+  note: 'Based on RFC 9396, the FAPI 2.0 Security Profile (February 2025) and the Berlin Group NextGenPSD2 Implementation Guidelines 1.3.16. Accounts, keys and tokens are examples, and signatures are shortened.',
+  client: {
+    bank: 'Your bank',
+    approve: 'Approve',
+    cancel: 'Cancel',
+    headings: {
+      scope: 'Example Store wants to',
+      psd2: 'Example Store asks you to confirm this payment',
+      rar: 'Example Store asks you to confirm this payment',
+    },
+    summaries: {
+      scope: 'Example Store asks the bank for permission to make payments, with the scope "payments". The connection follows FAPI 2.0, so the token is well protected, but nothing in it says how much or to whom.',
+      psd2: 'This is how most banks in Europe do it under PSD2, following the Berlin Group standard. Example Store first sends the payment to the bank, then asks Laura to approve it with a scope that points at that payment.',
+      rar: 'Example Store puts the payment itself in the authorization request, as authorization_details (RFC 9396). Laura approves exactly that payment, and the token carries it, so the bank can check every call against it.',
+    },
+    notes: {
+      scope: 'FAPI 2.0 protects how the token is obtained and used, not what it allows. The profile itself recommends rich authorization requests when a scope is not expressive enough.',
+      psd2: 'The scope "PIS:" followed by the payment id is a Berlin Group convention, not part of OAuth. Each open banking ecosystem invented its own way to tie a token to a payment, and RFC 9396 is the standard way to do it.',
+      rar: 'payment_initiation is the example type in RFC 9396. Each bank defines its own types and fields, and still has to check every payment against the token.',
+    },
+    steps: {
+      par: 'Example Store sends the request straight to the bank, signed with its own key, instead of putting it in the browser address. The bank answers with a reference that expires in a minute.',
+      createPayment: 'Example Store sends the payment to the bank. The bank stores it as received and answers with its id and where to authorize it.',
+      authorize: 'Laura’s browser goes to the bank with only that reference. She signs in and sees what she is asked to approve.',
+      approve: 'Laura approves. The bank sends her back to the store with a code that works once and for a minute, and with the bank’s name (iss), so the store can check where the code comes from.',
+      token: 'The store exchanges the code for a token. The token is tied to a key only the store holds (DPoP), so it is useless if stolen.',
+      pay: 'The store makes the payment.',
+      status: 'The bank runs the payment by itself once Laura approves it. The store uses the token only to check its status.',
+    },
+    overrides: {
+      scope: { pay: 'The store makes the payment. The bank can only check that the token has the scope "payments".' },
+      psd2: {
+        authorize: 'Laura’s browser goes to the bank with the scope "PIS:" and the payment id. She signs in and the bank shows her the payment it already has.',
+        approve: 'Laura approves. The bank sends her back to the store with a code that works once.',
+        token: 'The store exchanges the code for a token, identifying itself with its eIDAS certificate over mutual TLS. The token is bound to that certificate.',
+      },
+      rar: { pay: 'The store makes the payment. The bank checks that the amount and the payee match the token.' },
+    } as Record<string, Record<string, string>>,
+    outcomes: {
+      accepted: 'The bank accepts it. The token allows any payment, and Laura never saw this one.',
+      newApproval: 'This token cannot pay it, as it only covers the first payment. The new payment waits until Laura approves it at her bank, where she will see 4,500.00 EUR.',
+      rejected: 'The bank rejects it. The amount and the payee do not match the payment in the token.',
+    },
+    reasons: { 200: 'OK', 201: 'Created', 403: 'Forbidden' } as Record<number, string>,
+    request: 'Request',
+    response: 'Response',
+  },
+};
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <p><a href={routes.projects}>{t.back}</a></p>
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+  </header>
+
+  <div class="debugger scim rar">
+    <p class="sc-label" id="ra-approach">{t.approachLabel}</p>
+    <div class="filter" role="group" aria-labelledby="ra-approach">
+      {
+        APPROACHES.map((approach, index) => (
+          <button type="button" data-approach={approach} aria-pressed={String(index === 0)}>
+            {t.approaches[approach]}
+          </button>
+        ))
+      }
+    </div>
+
+    <section aria-live="polite">
+      <p class="sc-summary" data-ra="summary"></p>
+
+      <h2>{t.consentTitle}</h2>
+      <div class="ra-consent" data-ra="consent"></div>
+
+      <h2>{t.callsTitle}</h2>
+      <ol class="sc-calls" data-ra="calls"></ol>
+      <p class="sc-note" data-ra="note"></p>
+
+      <h2>{t.tokenTitle}</h2>
+      <pre class="ra-token" data-ra="token"></pre>
+
+      <h2>{t.misuseTitle}</h2>
+      <button type="button" class="btn" data-ra="try">{t.misuseButton}</button>
+      <div data-ra="misuse" hidden>
+        <p class="ra-outcome" data-ra="outcome"></p>
+        <ol class="sc-calls" data-ra="misuse-call"></ol>
+      </div>
+    </section>
+
+    <h2>{t.compareTitle}</h2>
+    <div class="ra-table">
+      <table>
+        <thead>
+          <tr>{t.compare.head.map((cell) => <th scope="col">{cell}</th>)}</tr>
+        </thead>
+        <tbody>
+          {
+            t.compare.rows.map(([label, ...cells]) => (
+              <tr>
+                <th scope="row">{label}</th>
+                {cells.map((cell) => (
+                  <td>{cell}</td>
+                ))}
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <p class="fine sc-foot">{t.note}</p>
+  </div>
+
+  <script type="application/json" id="ra-text" set:html={JSON.stringify(t.client)} />
+  <ProjectNav current="rar-vs-scopes" demos />
+</Base>
+
+<script>
+  import { json, requestText, responseText, scenario, type Approach, type Call } from '../lib/rar/payment';
+
+  const text = JSON.parse(document.getElementById('ra-text')!.textContent!);
+  const el = (name: string) => document.querySelector<HTMLElement>(`[data-ra="${name}"]`)!;
+  const make = <K extends keyof HTMLElementTagNameMap>(tag: K, content?: string, className?: string) => {
+    const node = document.createElement(tag);
+    if (content !== undefined) node.textContent = content;
+    if (className) node.className = className;
+    return node;
+  };
+
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-approach]')];
+  let approach: Approach = 'scope';
+
+  const reason = (status: number) => text.reasons[status] ?? '';
+  const stepText = (call: Call) => text.overrides[approach]?.[call.step] ?? text.steps[call.step];
+
+  function callItem(call: Call) {
+    const item = make('li', undefined, 'sc-call');
+    item.dataset.method = call.method;
+    const url = new URL(call.url);
+    const line = make('p', undefined, 'sc-line');
+    line.append(
+      make('span', call.method, 'sc-method'),
+      make('code', `${url.host}${url.pathname}`, 'sc-path'),
+      make('span', `${call.status} ${reason(call.status)}`.trim(), 'sc-status'),
+    );
+    item.append(line, make('p', stepText(call), 'sc-step'));
+
+    const details = make('details', undefined, 'tech');
+    details.append(
+      make('summary', `${text.request} / ${text.response}`),
+      make('h3', text.request),
+      make('pre', requestText(call)),
+      make('h3', text.response),
+      make('pre', responseText(call, reason(call.status))),
+    );
+    item.append(details);
+    return item;
+  }
+
+  function consent(lines: { label: string; value: string }[]) {
+    const list = make('dl');
+    for (const line of lines) list.append(make('dt', line.label), make('dd', line.value));
+    const actions = make('p', undefined, 'ra-actions');
+    actions.setAttribute('aria-hidden', 'true');
+    actions.append(make('span', text.cancel), make('span', text.approve, 'ra-primary'));
+    return [make('p', text.bank, 'ra-bank'), make('p', text.headings[approach], 'ra-heading'), list, actions];
+  }
+
+  function render() {
+    const found = scenario(approach);
+    el('summary').textContent = text.summaries[approach];
+    el('consent').replaceChildren(...consent(found.consent));
+    el('calls').replaceChildren(...found.calls.map(callItem));
+    el('note').textContent = text.notes[approach];
+    el('token').textContent = json(found.token);
+    el('misuse').hidden = true;
+    el('outcome').textContent = text.outcomes[found.misuse.outcome];
+    el('outcome').dataset.outcome = found.misuse.outcome;
+    el('misuse-call').replaceChildren(callItem(found.misuse.call));
+    for (const button of buttons) button.setAttribute('aria-pressed', String(button.dataset.approach === approach));
+  }
+
+  for (const button of buttons) {
+    button.addEventListener('click', () => {
+      approach = button.dataset.approach as Approach;
+      render();
+    });
+  }
+  el('try').addEventListener('click', () => {
+    el('misuse').hidden = false;
+  });
+
+  render();
+</script>

@@ -2434,3 +2434,86 @@ li[data-state='error'] .sv-name {
 .sc-foot {
   margin-top: 2rem;
 }
+
+/* Scopes vs RAR */
+.rar .filter {
+  margin-bottom: 0;
+}
+.ra-consent {
+  max-width: 26rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.ra-bank {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.ra-heading {
+  margin: 0.3rem 0 0.8rem;
+  font-weight: 600;
+}
+.ra-consent dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0;
+}
+.ra-consent dt {
+  color: var(--muted);
+}
+.ra-consent dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.ra-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin: 1.1rem 0 0;
+  font-size: 0.9rem;
+}
+.ra-actions span {
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+.ra-actions .ra-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+.ra-token {
+  overflow-x: auto;
+}
+.ra-outcome {
+  margin-top: 1rem;
+  padding: 0.8rem 1rem;
+  border-left: 2px solid var(--ok);
+  background: var(--surface);
+  max-width: 68ch;
+}
+.ra-outcome[data-outcome='accepted'] {
+  border-left-color: var(--danger);
+}
+.ra-table {
+  overflow-x: auto;
+}
+.ra-table table {
+  min-width: 40rem;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.ra-table th,
+.ra-table td {
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.ra-table thead th {
+  color: var(--muted);
+  font-weight: 500;
+}
