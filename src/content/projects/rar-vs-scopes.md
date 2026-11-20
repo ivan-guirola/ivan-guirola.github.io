@@ -7,6 +7,7 @@ date: 2026-11-20
 demo: https://ivan-guirola.github.io/tools/rar-vs-scopes/
 repo: https://github.com/ivan-guirola/ivan-guirola.github.io/tree/main/src/lib/rar
 featured: true
+draft: true
 ---
 
 When an app pays from someone's bank account, the bank has to know exactly what the person agreed to. A plain OAuth scope such as "payments" cannot say how much or to whom, so open banking had to find other ways.
