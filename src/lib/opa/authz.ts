@@ -4,8 +4,12 @@ export type Action = 'read' | 'approve';
 export type PersonId = 'laura' | 'marco' | 'ana' | 'bot';
 
 export interface Token {
+  iss: string;
   sub: string;
   aud: string;
+  iat: number;
+  exp: number;
+  jti: string;
   roles?: string[];
   department?: string;
   amr?: string[];
@@ -38,11 +42,14 @@ export const EXPENSES = Object.keys(policyData.expenses);
 export const DATA: Data = policyData;
 export const ENTRYPOINT = 'authz/decision';
 
+const ISSUED = 1795161600;
+const common = (jti: string) => ({ iss: 'https://login.example.com', aud: 'expenses-api', iat: ISSUED, exp: ISSUED + 900, jti });
+
 const TOKENS: Record<PersonId, Token> = {
-  laura: { sub: 'laura.martin', aud: 'expenses-api', roles: ['employee'], department: 'Sales', amr: ['pwd'] },
-  marco: { sub: 'marco.ruiz', aud: 'expenses-api', roles: ['employee', 'manager'], department: 'Sales', amr: ['pwd'] },
-  ana: { sub: 'ana.lopez', aud: 'expenses-api', roles: ['employee', 'finance'], department: 'Finance', amr: ['pwd'] },
-  bot: { sub: 'expense-bot', aud: 'expenses-api', client_id: 'expense-bot', scope: 'expenses:read' },
+  laura: { ...common('a81f'), sub: 'laura.martin', client_id: 'expenses-web', roles: ['employee'], department: 'Sales', amr: ['pwd'] },
+  marco: { ...common('c42d'), sub: 'marco.ruiz', client_id: 'expenses-web', roles: ['employee', 'manager'], department: 'Sales', amr: ['pwd'] },
+  ana: { ...common('e93b'), sub: 'ana.lopez', client_id: 'expenses-web', roles: ['employee', 'finance'], department: 'Finance', amr: ['pwd'] },
+  bot: { ...common('f17a'), sub: 'expense-bot', client_id: 'expense-bot', scope: 'expenses:read' },
 };
 
 export const isPerson = (person: PersonId) => person !== 'bot';
@@ -51,6 +58,35 @@ export function token(person: PersonId, mfa: boolean): Token {
   const base = TOKENS[person];
   if (!isPerson(person)) return { ...base };
   return { ...base, amr: mfa ? ['pwd', 'mfa'] : ['pwd'] };
+}
+
+const base64url = (value: string) =>
+  btoa(String.fromCharCode(...new TextEncoder().encode(value)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+/** The access token as it travels: a JWT (RFC 9068) whose signature is left out of this example. */
+export function encodeToken(claims: Token) {
+  const header = { alg: 'RS256', typ: 'at+jwt', kid: 'login-2026' };
+  return `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(claims))}.signature`;
+}
+
+/** What each rule reads from the token, the expense and the data, found in the policy source. */
+export function ruleInputs(source: string) {
+  const lines = source.split('\n');
+  const inputs: Record<string, string[]> = {};
+  for (const [id, [start, end]] of Object.entries(ruleLines(source))) {
+    const body = lines.slice(start - 1, end).join('\n');
+    const found = new Set<string>();
+    for (const [, claim] of body.matchAll(/\btoken\.(\w+)/g)) found.add(`token.${claim}`);
+    if (/\bin roles\b/.test(body)) found.add('token.roles');
+    for (const [, field] of body.matchAll(/\bexpense\.(\w+)/g)) found.add(`expense.${field}`);
+    if (/\bnot expense\b/.test(body)) found.add('expense');
+    for (const [, limit] of body.matchAll(/\bdata\.limits\.(\w+)/g)) found.add(`data.limits.${limit}`);
+    inputs[id] = [...found];
+  }
+  return inputs;
 }
 
 export function input(person: PersonId, action: Action, expense: string, mfa: boolean): Input {

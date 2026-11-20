@@ -2,7 +2,7 @@
 import Base from '../layouts/Base.astro';
 import ProjectNav from '../components/ProjectNav.astro';
 import { routes } from '../data/nav';
-import { ACTIONS, DATA, EXPENSES, PEOPLE, ruleLines } from '../lib/opa/authz';
+import { ACTIONS, DATA, EXPENSES, PEOPLE, ruleInputs, ruleLines } from '../lib/opa/authz';
 import source from '../lib/opa/expenses.rego?raw';
 
 const names: Record<string, string> = {
@@ -39,6 +39,10 @@ const t = {
   managerLimit: 'Managers can approve up to (EUR)',
   mfaLimit: 'MFA is needed to approve more than (EUR)',
   decisionTitle: 'OPA’s decision',
+  tokenTitle: 'The access token',
+  tokenHint:
+    'Issued by the identity provider and sent with the request. The API checks the signature and passes the claims to OPA as input.token.',
+  tokenLegend: 'Highlighted: the claims the rules above check. OPA ignores the rest.',
   sourceTitle: 'The policy',
   sourceHint: 'Written in Rego. The rules behind the current decision are highlighted.',
   callTitle: 'How the API asks OPA',
@@ -52,6 +56,7 @@ const t = {
     denied: 'Denied',
     grant: 'Allows',
     deny: 'Blocks',
+    checks: 'Checks',
     noRule: 'No rule allows it, so OPA denies it by default.',
     denyWins: 'A blocking rule always wins over the rules that allow.',
     took: 'Decided in {ms} ms.',
@@ -63,6 +68,7 @@ const t = {
 
 const lines = source.replace(/\n$/, '').split('\n');
 const rules = ruleLines(source);
+const inputs = ruleInputs(source);
 ---
 
 <Base page="projects" title={t.title} description={t.description}>
@@ -140,6 +146,12 @@ const rules = ruleLines(source);
         <ul class="op-reasons" data-op="reasons"></ul>
         <p class="fine" data-op="took"></p>
       </div>
+
+      <h2>{t.tokenTitle}</h2>
+      <p class="fine">{t.tokenHint}</p>
+      <p class="op-jwt"><code data-op="jwt"></code></p>
+      <pre class="op-claims" data-op="claims"></pre>
+      <p class="fine op-legend">{t.tokenLegend}</p>
     </section>
     </div>
 
@@ -179,7 +191,7 @@ const rules = ruleLines(source);
     <p class="fine sc-foot">{t.note}</p>
   </div>
 
-  <script type="application/json" id="op-text" set:html={JSON.stringify({ ...t.client, rules })} />
+  <script type="application/json" id="op-text" set:html={JSON.stringify({ ...t.client, rules, inputs })} />
   <ProjectNav current="opa-api-authorization" demos />
 </Base>
 
@@ -188,6 +200,7 @@ const rules = ruleLines(source);
   import {
     DATA,
     ENTRYPOINT,
+    encodeToken,
     input,
     isPerson,
     json,
@@ -247,7 +260,15 @@ const rules = ruleLines(source);
     ].map((reason) => {
       const item = make('li');
       item.dataset.kind = reason.kind;
-      item.append(make('span', reason.kind === 'grant' ? text.grant : text.deny, 'op-kind'), make('span', reason.message));
+      const body = make('span');
+      body.append(make('span', reason.message));
+      const used: string[] = text.inputs[reason.id] ?? [];
+      if (used.length) {
+        const uses = make('span', `${text.checks} `, 'op-uses');
+        used.forEach((name, index) => uses.append(make('code', name), index < used.length - 1 ? ', ' : ''));
+        body.append(uses);
+      }
+      item.append(make('span', reason.kind === 'grant' ? text.grant : text.deny, 'op-kind'), body);
       return item;
     });
     if (!decision.grants.length && !decision.denies.length) reasons.push(make('li', text.noRule));
@@ -266,6 +287,42 @@ const rules = ruleLines(source);
       json({ result: decision }),
     ].join('\n');
     highlight(decision);
+    renderToken(current, decision);
+  }
+
+  function renderToken(current: ReturnType<typeof input>, decision: Decision) {
+    const used = new Map<string, string>();
+    const collect = (reasons: Decision['grants'], kind: string) => {
+      for (const reason of reasons) {
+        for (const name of text.inputs[reason.id] ?? []) {
+          if (name.startsWith('token.') && used.get(name.slice(6)) !== 'deny') used.set(name.slice(6), kind);
+        }
+      }
+    };
+    collect(decision.grants, 'grant');
+    collect(decision.denies, 'deny');
+
+    const [header, payload, signature] = encodeToken(current.token).split('.');
+    el('jwt').replaceChildren(
+      make('span', header, 'op-jwt-header'),
+      '.',
+      make('span', payload, 'op-jwt-payload'),
+      '.',
+      make('span', signature, 'op-jwt-signature'),
+    );
+
+    const entries = Object.entries(current.token);
+    el('claims').replaceChildren(
+      '{\n',
+      ...entries.map(([key, value], index) => {
+        const line = make('span', `  ${JSON.stringify(key)}: ${JSON.stringify(value)}${index < entries.length - 1 ? ',' : ''}`);
+        line.dataset.claim = key;
+        const kind = used.get(key);
+        if (kind) line.dataset.hit = kind;
+        return line;
+      }),
+      '}',
+    );
   }
 
   function renderMatrix() {

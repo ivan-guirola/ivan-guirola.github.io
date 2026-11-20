@@ -78,5 +78,17 @@ await scenario('the table selects a combination', async (page) => {
   assert.equal(await verdict(page), 'Denied');
 });
 
+await scenario('shows the token and the claims the rules check', async (page) => {
+  const jwt = await page.innerText(op('jwt'));
+  const [, payload] = jwt.split('.');
+  assert.equal(JSON.parse(Buffer.from(payload, 'base64url').toString()).sub, 'marco.ruiz');
+  const hit = await page.locator(`${op('claims')} [data-hit]`).evaluateAll((lines) => lines.map((line) => `${line.dataset.claim}:${line.dataset.hit}`));
+  assert.deepEqual(hit.sort(), ['amr:deny', 'roles:deny']);
+  assert.match((await reasons(page)).join('\n'), /Checks token\.roles, expense\.amount, data\.limits\.manager/);
+  await page.click('[data-person="bot"]');
+  await page.click('[data-action="read"]');
+  assert.deepEqual(await page.locator(`${op('claims')} [data-hit]`).evaluateAll((lines) => lines.map((line) => line.dataset.claim)), ['scope']);
+});
+
 await browser.close();
 console.log(results.join('\n'));

@@ -2679,15 +2679,52 @@ li[data-state='error'] .sv-name {
 @media (min-width: 960px) {
   .op-top {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 22rem);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
     gap: 2.5rem;
     align-items: start;
   }
-  .op-result {
-    position: sticky;
-    top: 5rem;
-  }
-  .op-result h2 {
+  .op-result > h2:first-child {
     margin-top: 0;
   }
+}
+.op-uses {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.op-uses code {
+  font-size: 0.78rem;
+}
+.op-jwt {
+  margin: 0.6rem 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.op-jwt-header {
+  color: var(--danger);
+}
+.op-jwt-payload {
+  color: var(--accent);
+}
+.op-jwt-signature {
+  color: var(--ok);
+}
+.op-claims {
+  overflow-x: auto;
+  white-space: pre;
+  font-size: 0.8rem;
+}
+.op-claims span {
+  display: block;
+}
+.op-claims span[data-hit='grant'] {
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+}
+.op-claims span[data-hit='deny'] {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+}
+.op-legend {
+  margin-top: 0.4rem;
 }

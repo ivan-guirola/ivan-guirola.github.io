@@ -1,7 +1,22 @@
 import { readFileSync } from 'node:fs';
 import { loadPolicy } from '@open-policy-agent/opa-wasm';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { DATA, EXPENSES, PEOPLE, input, matrix, requestLine, ruleLines, token, unwrap, withLimits, type Data, type Evaluate } from './authz';
+import {
+  DATA,
+  EXPENSES,
+  PEOPLE,
+  encodeToken,
+  input,
+  matrix,
+  requestLine,
+  ruleInputs,
+  ruleLines,
+  token,
+  unwrap,
+  withLimits,
+  type Data,
+  type Evaluate,
+} from './authz';
 
 const wasm = readFileSync(new URL('../../../public/opa/expenses.wasm', import.meta.url));
 const source = readFileSync(new URL('./expenses.rego', import.meta.url), 'utf8');
@@ -73,6 +88,34 @@ describe('matrix', () => {
     expect(rows.map((row) => row.person)).toEqual(PEOPLE);
     for (const row of rows) expect(row.cells.map((cell) => cell.expense)).toEqual(EXPENSES);
     expect(rows.find((row) => row.person === 'ana')!.cells.every((cell) => cell.decision.allow)).toBe(true);
+  });
+});
+
+describe('encodeToken', () => {
+  it('writes a JWT whose payload decodes back to the claims', () => {
+    const claims = token('marco', true);
+    const [header, payload, signature] = encodeToken(claims).split('.');
+    const decode = (part: string) => JSON.parse(Buffer.from(part, 'base64url').toString('utf8'));
+    expect(decode(header)).toEqual({ alg: 'RS256', typ: 'at+jwt', kid: 'login-2026' });
+    expect(decode(payload)).toEqual(claims);
+    expect(signature).toBe('signature');
+  });
+
+  it('carries the claims RFC 9068 asks for', () => {
+    for (const person of PEOPLE) {
+      expect(Object.keys(token(person, false))).toEqual(expect.arrayContaining(['iss', 'exp', 'aud', 'sub', 'client_id', 'iat', 'jti']));
+    }
+  });
+});
+
+describe('ruleInputs', () => {
+  it('lists what each rule reads from the token, the expense and the data', () => {
+    const inputs = ruleInputs(source);
+    expect(inputs['approve-manager'].sort()).toEqual(['data.limits.manager', 'expense.amount', 'expense.department', 'token.department', 'token.roles']);
+    expect(inputs['needs-mfa'].sort()).toEqual(['data.limits.mfa', 'expense.amount', 'token.amr']);
+    expect(inputs['read-service']).toEqual(['token.scope']);
+    expect(inputs.audience).toEqual(['token.aud']);
+    expect(inputs.unknown).toEqual(['expense']);
   });
 });
 
