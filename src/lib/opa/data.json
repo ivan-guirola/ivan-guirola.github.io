@@ -1,0 +1,9 @@
+{
+  "expenses": {
+    "E-101": { "owner": "laura.martin", "department": "Sales", "amount": 120, "description": "Client lunch", "status": "submitted" },
+    "E-102": { "owner": "marco.ruiz", "department": "Sales", "amount": 850, "description": "Conference ticket", "status": "submitted" },
+    "E-103": { "owner": "laura.martin", "department": "Sales", "amount": 6200, "description": "Trade fair stand", "status": "submitted" },
+    "E-104": { "owner": "ana.lopez", "department": "Finance", "amount": 300, "description": "Accounting course", "status": "paid" }
+  },
+  "limits": { "manager": 1000, "mfa": 5000 }
+}

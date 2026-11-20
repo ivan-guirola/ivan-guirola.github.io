@@ -24,6 +24,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - uses: open-policy-agent/setup-opa@v2
+        with:
+          version: 1.22.4
+      - run: opa test src/lib/opa
       - run: npm test
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3

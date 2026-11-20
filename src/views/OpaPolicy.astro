@@ -1,0 +1,351 @@
+---
+import Base from '../layouts/Base.astro';
+import ProjectNav from '../components/ProjectNav.astro';
+import { routes } from '../data/nav';
+import { ACTIONS, DATA, EXPENSES, PEOPLE, ruleLines } from '../lib/opa/authz';
+import source from '../lib/opa/expenses.rego?raw';
+
+const names: Record<string, string> = {
+  'laura.martin': 'Laura',
+  'marco.ruiz': 'Marco',
+  'ana.lopez': 'Ana',
+};
+
+const t = {
+  title: 'API authorization with OPA',
+  description:
+    'An expenses API asks Open Policy Agent who can read and approve each expense. The real Rego policy runs in the browser, compiled to WebAssembly, and explains every decision.',
+  lead: 'The expenses API does not decide who can do what: for every request, it asks Open Policy Agent (OPA). This page runs the real policy, compiled to WebAssembly, in your browser. Pick who calls the API and what they try, change the limits, and see the decision and the rules behind it.',
+  back: 'All projects',
+  who: 'Who calls the API',
+  people: {
+    laura: ['Laura Martín', 'Analyst, Sales'],
+    marco: ['Marco Ruiz', 'Manager, Sales'],
+    ana: ['Ana López', 'Finance controller'],
+    bot: ['Reporting service', 'An application, not a person'],
+  },
+  what: 'What they try',
+  actions: { read: 'Read the expense', approve: 'Approve the expense' },
+  which: 'Which expense',
+  expenses: Object.fromEntries(
+    EXPENSES.map((id) => {
+      const expense = DATA.expenses[id as keyof typeof DATA.expenses];
+      return [id, `${expense.description}, ${expense.amount.toLocaleString('en-GB')} EUR, by ${names[expense.owner]}${expense.status === 'paid' ? ' (already paid)' : ''}`];
+    }),
+  ),
+  mfa: 'Signed in with MFA',
+  mfaService: 'Applications do not sign in with MFA.',
+  limits: 'Limits in the policy data',
+  managerLimit: 'Managers can approve up to (EUR)',
+  mfaLimit: 'MFA is needed to approve more than (EUR)',
+  decisionTitle: 'OPA’s decision',
+  sourceTitle: 'The policy',
+  sourceHint: 'Written in Rego. The rules behind the current decision are highlighted.',
+  callTitle: 'How the API asks OPA',
+  callHint: 'In production OPA usually runs next to the API and answers over HTTP, like this. Here the same policy runs in the browser.',
+  dataTitle: 'The data OPA uses',
+  matrixTitle: 'Everyone and every expense',
+  matrixHint: 'The same policy for every combination. Select one to see why.',
+  note: 'The policy is compiled with OPA 1.22 (opa build -t wasm) and evaluated with the official opa-wasm library. The people, tokens and expenses are examples.',
+  client: {
+    allowed: 'Allowed',
+    denied: 'Denied',
+    grant: 'Allows',
+    deny: 'Blocks',
+    noRule: 'No rule allows it, so OPA denies it by default.',
+    denyWins: 'A blocking rule always wins over the rules that allow.',
+    took: 'Decided in {ms} ms.',
+    loading: 'Loading the policy…',
+    failed: 'The policy could not be loaded. Reload the page to try again.',
+    people: { laura: 'Laura', marco: 'Marco', ana: 'Ana', bot: 'Reporting service' },
+  },
+};
+
+const lines = source.replace(/\n$/, '').split('\n');
+const rules = ruleLines(source);
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <p><a href={routes.projects}>{t.back}</a></p>
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+  </header>
+
+  <div class="debugger scim opa">
+    <div class="op-top">
+    <div class="op-controls">
+      <div>
+        <p class="sc-label" id="op-who">{t.who}</p>
+        <div class="filter op-people" role="group" aria-labelledby="op-who">
+          {
+            PEOPLE.map((person, index) => (
+              <button type="button" data-person={person} aria-pressed={String(index === 1)}>
+                <strong>{t.people[person][0]}</strong>
+                <span>{t.people[person][1]}</span>
+              </button>
+            ))
+          }
+        </div>
+      </div>
+      <div>
+        <p class="sc-label" id="op-what">{t.what}</p>
+        <div class="filter" role="group" aria-labelledby="op-what">
+          {
+            ACTIONS.map((action) => (
+              <button type="button" data-action={action} aria-pressed={String(action === 'approve')}>
+                {t.actions[action]}
+              </button>
+            ))
+          }
+        </div>
+      </div>
+      <div>
+        <p class="sc-label" id="op-which">{t.which}</p>
+        <div class="filter op-expenses" role="group" aria-labelledby="op-which">
+          {
+            EXPENSES.map((id) => (
+              <button type="button" data-expense={id} aria-pressed={String(id === 'E-103')}>
+                <code>{id}</code> {t.expenses[id]}
+              </button>
+            ))
+          }
+        </div>
+      </div>
+      <div class="op-settings">
+        <label class="op-check">
+          <input type="checkbox" data-op="mfa" />
+          {t.mfa}
+        </label>
+        <p class="fine" data-op="mfa-hint" hidden>{t.mfaService}</p>
+        <fieldset>
+          <legend class="sc-label">{t.limits}</legend>
+          <label>
+            {t.managerLimit}
+            <input type="number" min="0" step="100" value={DATA.limits.manager} data-op="manager" />
+          </label>
+          <label>
+            {t.mfaLimit}
+            <input type="number" min="0" step="500" value={DATA.limits.mfa} data-op="mfa-limit" />
+          </label>
+        </fieldset>
+      </div>
+    </div>
+
+    <section aria-live="polite" class="op-result">
+      <h2>{t.decisionTitle}</h2>
+      <div class="op-decision" data-op="decision">
+        <p class="op-verdict" data-op="verdict">{t.client.loading}</p>
+        <p class="op-request"><code data-op="request"></code></p>
+        <ul class="op-reasons" data-op="reasons"></ul>
+        <p class="fine" data-op="took"></p>
+      </div>
+    </section>
+    </div>
+
+    <h2>{t.matrixTitle}</h2>
+    <p class="fine">{t.matrixHint}</p>
+    <div class="ra-table">
+      <table class="op-matrix">
+        <thead>
+          <tr>
+            <th scope="col"></th>
+            {
+              EXPENSES.map((id) => (
+                <th scope="col">
+                  <code>{id}</code>
+                </th>
+              ))
+            }
+          </tr>
+        </thead>
+        <tbody data-op="matrix"></tbody>
+      </table>
+    </div>
+
+    <h2>{t.sourceTitle}</h2>
+    <p class="fine">{t.sourceHint}</p>
+    <pre class="op-source" data-op="source">{lines.map((line, index) => <span data-line={index + 1}>{line || ' '}</span>)}</pre>
+
+    <h2>{t.callTitle}</h2>
+    <p class="fine">{t.callHint}</p>
+    <pre class="ra-token" data-op="call"></pre>
+
+    <details class="tech">
+      <summary>{t.dataTitle}</summary>
+      <pre data-op="data"></pre>
+    </details>
+
+    <p class="fine sc-foot">{t.note}</p>
+  </div>
+
+  <script type="application/json" id="op-text" set:html={JSON.stringify({ ...t.client, rules })} />
+  <ProjectNav current="opa-api-authorization" demos />
+</Base>
+
+<script>
+  import { loadPolicy } from '@open-policy-agent/opa-wasm';
+  import {
+    DATA,
+    ENTRYPOINT,
+    input,
+    isPerson,
+    json,
+    matrix,
+    requestLine,
+    unwrap,
+    withLimits,
+    type Action,
+    type Decision,
+    type Evaluate,
+    type PersonId,
+  } from '../lib/opa/authz';
+
+  const text = JSON.parse(document.getElementById('op-text')!.textContent!);
+  const el = <T extends HTMLElement = HTMLElement>(name: string) => document.querySelector<T>(`[data-op="${name}"]`)!;
+  const make = <K extends keyof HTMLElementTagNameMap>(tag: K, content?: string, className?: string) => {
+    const node = document.createElement(tag);
+    if (content !== undefined) node.textContent = content;
+    if (className) node.className = className;
+    return node;
+  };
+
+  const state = { person: 'marco' as PersonId, action: 'approve' as Action, expense: 'E-103', mfa: false };
+  const groups = { person: 'data-person', action: 'data-action', expense: 'data-expense' } as const;
+  const sourceLines = [...document.querySelectorAll<HTMLElement>('[data-line]')];
+  let evaluate: Evaluate;
+
+  const number = (name: string, fallback: number) => {
+    const value = Number(el<HTMLInputElement>(name).value);
+    return Number.isFinite(value) && value >= 0 ? Math.round(value) : fallback;
+  };
+
+  function highlight(decision: Decision) {
+    for (const line of sourceLines) line.removeAttribute('data-hit');
+    const mark = (ids: string[], kind: string) => {
+      for (const id of ids) {
+        const [start, end] = text.rules[id] ?? [0, -1];
+        for (let n = start; n <= end; n++) sourceLines[n - 1]?.setAttribute('data-hit', kind);
+      }
+    };
+    mark(decision.grants.map((reason) => reason.id), 'grant');
+    mark(decision.denies.map((reason) => reason.id), 'deny');
+  }
+
+  function renderDecision() {
+    const current = input(state.person, state.action, state.expense, state.mfa);
+    const started = performance.now();
+    const decision = evaluate(current);
+    const took = performance.now() - started;
+
+    el('decision').dataset.allow = String(decision.allow);
+    el('verdict').textContent = decision.allow ? text.allowed : text.denied;
+    el('request').textContent = requestLine(current);
+    const reasons = [
+      ...decision.grants.map((reason) => ({ ...reason, kind: 'grant' })),
+      ...decision.denies.map((reason) => ({ ...reason, kind: 'deny' })),
+    ].map((reason) => {
+      const item = make('li');
+      item.dataset.kind = reason.kind;
+      item.append(make('span', reason.kind === 'grant' ? text.grant : text.deny, 'op-kind'), make('span', reason.message));
+      return item;
+    });
+    if (!decision.grants.length && !decision.denies.length) reasons.push(make('li', text.noRule));
+    if (decision.grants.length && decision.denies.length) reasons.push(make('li', text.denyWins, 'op-wins'));
+    el('reasons').replaceChildren(...reasons);
+    el('took').textContent = text.took.replace('{ms}', took < 0.01 ? '<0.01' : took.toFixed(2));
+    el('call').textContent = [
+      `POST /v1/data/${ENTRYPOINT} HTTP/1.1`,
+      'Content-Type: application/json',
+      '',
+      json({ input: current }),
+      '',
+      'HTTP/1.1 200 OK',
+      'Content-Type: application/json',
+      '',
+      json({ result: decision }),
+    ].join('\n');
+    highlight(decision);
+  }
+
+  function renderMatrix() {
+    const rows = matrix(evaluate, state.action, state.mfa).map((row) => {
+      const tr = make('tr');
+      const th = make('th', text.people[row.person]);
+      th.scope = 'row';
+      tr.append(th);
+      for (const cell of row.cells) {
+        const td = make('td');
+        const button = make('button', cell.decision.allow ? text.allowed : text.denied);
+        button.type = 'button';
+        button.dataset.allow = String(cell.decision.allow);
+        button.setAttribute('aria-pressed', String(row.person === state.person && cell.expense === state.expense));
+        button.setAttribute('aria-label', `${text.people[row.person]}, ${cell.expense}: ${button.textContent}`);
+        button.addEventListener('click', () => {
+          state.person = row.person;
+          state.expense = cell.expense;
+          render();
+        });
+        td.append(button);
+        tr.append(td);
+      }
+      return tr;
+    });
+    el('matrix').replaceChildren(...rows);
+  }
+
+  function render() {
+    for (const [key, attribute] of Object.entries(groups)) {
+      for (const button of document.querySelectorAll<HTMLButtonElement>(`[${attribute}]`)) {
+        button.setAttribute('aria-pressed', String(button.getAttribute(attribute) === state[key as keyof typeof groups]));
+      }
+    }
+    const mfa = el<HTMLInputElement>('mfa');
+    mfa.disabled = !isPerson(state.person);
+    mfa.checked = state.mfa && isPerson(state.person);
+    el('mfa-hint').hidden = isPerson(state.person);
+    renderDecision();
+    renderMatrix();
+  }
+
+  for (const [key, attribute] of Object.entries(groups)) {
+    for (const button of document.querySelectorAll<HTMLButtonElement>(`[${attribute}]`)) {
+      button.addEventListener('click', () => {
+        Object.assign(state, { [key]: button.getAttribute(attribute) });
+        if (evaluate) render();
+      });
+    }
+  }
+
+  async function start() {
+    try {
+      const response = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/opa/expenses.wasm`);
+      if (!response.ok) throw new Error(String(response.status));
+      const policy = await loadPolicy(await response.arrayBuffer());
+      const setData = () => {
+        const data = withLimits(DATA, { manager: number('manager', DATA.limits.manager), mfa: number('mfa-limit', DATA.limits.mfa) });
+        policy.setData(data);
+        el('data').textContent = json(data);
+      };
+      setData();
+      evaluate = (value) => unwrap(policy.evaluate(value));
+      evaluate(input(state.person, state.action, state.expense, state.mfa));
+
+      el<HTMLInputElement>('mfa').addEventListener('change', (event) => {
+        state.mfa = (event.target as HTMLInputElement).checked;
+        render();
+      });
+      for (const name of ['manager', 'mfa-limit']) {
+        el(name).addEventListener('input', () => {
+          setData();
+          render();
+        });
+      }
+      render();
+    } catch {
+      el('verdict').textContent = text.failed;
+    }
+  }
+
+  start();
+</script>
