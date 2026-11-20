@@ -3079,3 +3079,6 @@ li[data-state='error'] .sv-name {
   margin: 0 0 1rem;
   font-size: 0.8rem;
 }
+.tags .tag-dev {
+  color: var(--warn);
+}

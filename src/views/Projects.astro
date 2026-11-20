@@ -57,11 +57,12 @@ const used = categoryIds.filter((id) => projects.some((p) => p.data.category ===
           {projects.map((p) => (
             <li data-category={p.data.category}>
               <a class="row" href={`${routes.projects}${p.id}/`}>
-                <span class="cat">{categoryLabels[p.data.category]}{p.data.inDevelopment && <span class="badge-dev">In development</span>}</span>
+                <span class="cat">{categoryLabels[p.data.category]}</span>
                 <h2>{p.data.title}</h2>
                 <svg class="go" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" /></svg>
                 <p>{p.data.summary}</p>
                 <ul class="tags">
+                  {p.data.inDevelopment && <li class="tag-dev">In development</li>}
                   {p.data.tags.map((tag) => (
                     <li>{tag}</li>
                   ))}
