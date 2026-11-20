@@ -3075,10 +3075,7 @@ li[data-state='error'] .sv-name {
   text-transform: none;
   vertical-align: 0.05em;
 }
-.page-head .notice {
-  max-width: 62ch;
+.page-head .badge-dev {
   margin: 0 0 1rem;
-  padding: 0.6rem 0.9rem;
-  color: var(--warn);
-  font-size: 0.92rem;
+  font-size: 0.8rem;
 }

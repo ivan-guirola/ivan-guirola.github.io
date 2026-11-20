@@ -11,7 +11,7 @@ const t = {
     'Convert a legacy Ping AM (ForgeRock AM) Scripted Decision node script to the next-generation engine, see every change explained, and run both versions side by side to check they behave the same.',
   lead: 'Ping AM, formerly ForgeRock AM, runs journey scripts on two engines. Scripts written for the legacy one do not run on the next-generation engine as they are: the bindings changed. Paste a legacy Scripted Decision node script to get the next-generation version, with every change explained, then run both and check they do the same thing.',
   back: 'All projects',
-  inDevelopment: 'In development: the conversion has not been validated against a real Ping AM yet. Review the converted script before using it.',
+  inDevelopment: 'In development',
   examples: 'Examples',
   legacy: 'Legacy script',
   next: 'Next-generation script',
@@ -89,7 +89,7 @@ const samples = NODE_SAMPLES.map(({ id, code, scenario, answers }) => ({ id, cod
   <header class="page-head">
     <p><a href={routes.projects}>{t.back}</a></p>
     <h1>{t.title}</h1>
-    <p class="notice">{t.inDevelopment}</p>
+    <p class="badge-dev">{t.inDevelopment}</p>
     <p>{t.lead}</p>
   </header>
 
