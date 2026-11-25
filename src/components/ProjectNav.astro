@@ -1,12 +1,12 @@
 ---
 import { getCollection } from 'astro:content';
 import { routes, ui } from '../data/nav';
+import { projectHref } from '../data/projects';
 
 interface Props {
   current: string;
-  demos?: boolean;
 }
-const { current, demos = false } = Astro.props;
+const { current } = Astro.props;
 
 const all = (await getCollection('projects', (e) => !e.data.draft)).sort(
   (a, b) => b.data.date.valueOf() - a.data.date.valueOf() || a.id.localeCompare(b.id),
@@ -15,8 +15,7 @@ const at = all.findIndex((p) => p.id === current);
 const previous = all[(at - 1 + all.length) % all.length];
 const next = all[(at + 1) % all.length];
 const rest = all.filter((p) => ![current, previous.id, next.id].includes(p.id));
-const href = (p: (typeof all)[number]) =>
-  demos && p.data.demo ? new URL(p.data.demo).pathname : `${routes.projects}${p.id}/`;
+const href = (p: (typeof all)[number]) => projectHref(p.data);
 ---
 
 <p class="fine project-note">{ui.disclaimer}</p>

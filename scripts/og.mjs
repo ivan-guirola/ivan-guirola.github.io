@@ -94,6 +94,7 @@ for (const file of await pages(DIST)) {
   const parts = relative(DIST, file).split(sep).slice(0, -1);
   const path = parts.length ? `/${parts.join('/')}/` : '/';
   const home = path === '/';
+  if (!home && !meta(html, 'property', 'og:title')) continue;
   const title = home ? 'Iván Guirola' : meta(html, 'property', 'og:title').replace(/ \| Iván Guirola$/, '');
   await page.setContent(card({ title, description: meta(html, 'name', 'description'), path, home }), { waitUntil: 'load' });
   await page.evaluate(() => document.fonts.ready);

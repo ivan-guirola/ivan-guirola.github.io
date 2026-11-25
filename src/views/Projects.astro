@@ -5,6 +5,7 @@ import Preview from '../components/Preview.astro';
 import { routes, ui } from '../data/nav';
 import { site } from '../data/site';
 import { categoryIds, categoryLabels } from '../data/categories';
+import { projectHref } from '../data/projects';
 
 const t = {
   title: 'Projects',
@@ -56,7 +57,7 @@ const used = categoryIds.filter((id) => projects.some((p) => p.data.category ===
         <ul class="rows">
           {projects.map((p) => (
             <li data-category={p.data.category}>
-              <a class="row" href={`${routes.projects}${p.id}/`}>
+              <a class="row" href={projectHref(p.data)}>
                 <span class="cat">{categoryLabels[p.data.category]}</span>
                 <h2>{p.data.title}</h2>
                 <svg class="go" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" /></svg>
