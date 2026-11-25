@@ -5,9 +5,9 @@ import { routes } from '../data/nav';
 import { DEFAULT_INPUT, DESTINATIONS } from '../lib/rar/exact';
 
 const t = {
-  title: 'Exact permissions with RAR',
+  title: 'RAR demo',
   description:
-    'An app asks for permission to pay 45 EUR, and an AI agent asks to book one flight. Compare a plain OAuth scope with rich authorization requests (RFC 9396) and see what the token allows.',
+    'Rich authorization requests (RFC 9396) next to a plain OAuth scope, for a payment and for an AI agent booking a flight. The API checks every field of the call against authorization_details.',
   lead: 'An app asks your bank for permission. With a scope, all it can say is “payments”. With a rich authorization request it says exactly what it wants: this amount, to this payee, once. Try both and then try to use the permission for something else.',
   back: 'All projects',
   caseLabel: 'What happens',
@@ -252,7 +252,7 @@ const t = {
     id="rx-text"
     set:html={JSON.stringify({ ...t.client, app: t.app, appRole: t.appRole, appText: t.appText, server: t.server, api: t.api, destinations: t.destinations, travelledEmpty: t.travelledEmpty })}
   />
-  <ProjectNav current="rar-exact-permissions" demos />
+  <ProjectNav current="rar-demo" demos />
 </Base>
 
 <script>

@@ -4,9 +4,9 @@ import ProjectNav from '../components/ProjectNav.astro';
 import { routes } from '../data/nav';
 
 const t = {
-  title: 'Stolen tokens and DPoP',
+  title: 'DPoP tokens',
   description:
-    'Most access tokens work like cash: whoever holds one can use it. See an attacker use a copied token, and how DPoP (RFC 9449) ties the token to a key that never leaves the app.',
+    'Sender-constrained access tokens with DPoP (RFC 9449) next to bearer tokens. Proofs, the cnf.jkt binding and every check the API runs, against four attacks with a stolen token.',
   lead: 'Most access tokens work like cash: whoever holds one can use it. DPoP ties the token to a key that never leaves the app, so a copy is worth nothing. Get a token, use it, and then let an attacker try.',
   back: 'All projects',
   modeLabel: 'Kind of token',
@@ -191,7 +191,7 @@ const t = {
   </div>
 
   <script type="application/json" id="dp-text" set:html={JSON.stringify({ ...t.client, empty: t.empty })} />
-  <ProjectNav current="dpop-stolen-tokens" demos />
+  <ProjectNav current="dpop-tokens" demos />
 </Base>
 
 <script>

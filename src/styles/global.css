@@ -3083,7 +3083,7 @@ li[data-state='error'] .sv-name {
   color: var(--warn);
 }
 
-/* Exact permissions with RAR */
+/* RAR demo */
 .rx-controls {
   display: flex;
   flex-wrap: wrap;
@@ -3375,7 +3375,7 @@ h3.rx-payload {
   border-color: var(--warn);
 }
 
-/* Stolen tokens and DPoP */
+/* DPoP tokens */
 .dp-key {
   display: grid;
   gap: 0.2rem;

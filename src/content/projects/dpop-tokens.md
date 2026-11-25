@@ -1,6 +1,6 @@
 ---
-title: Stolen tokens and DPoP
-summary: Most access tokens work like cash, and whoever copies one can use it. See an attacker try, and how DPoP ties the token to a key that never leaves the app.
+title: DPoP tokens
+summary: Sender-constrained access tokens with DPoP (RFC 9449) next to bearer tokens. Proofs, the cnf.jkt binding and every check the API runs, against four attacks with a stolen token.
 category: oauth
 tags: [OAuth 2.0, DPoP, FAPI 2.0, JWT, TypeScript]
 date: 2026-11-25

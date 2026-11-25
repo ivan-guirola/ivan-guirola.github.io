@@ -1,6 +1,6 @@
 ---
-title: Exact permissions with RAR
-summary: An app asks for permission to pay 45 EUR, and an AI agent asks to book one flight. Compare a plain OAuth scope with rich authorization requests and see what the token allows.
+title: RAR demo
+summary: Rich authorization requests (RFC 9396) next to a plain OAuth scope, for a payment and for an AI agent booking a flight. The API checks every field of the call against authorization_details.
 category: oauth
 tags: [OAuth 2.0, RAR, FAPI 2.0, AI agents, TypeScript]
 date: 2026-11-25
