@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeJwt, verifyJwt } from './jose';
+import { decodeJwt, verifyJwt } from '../jose';
 import { DEFAULT_INPUT, nextFriday, requestText, startSession, type CaseId, type Mode } from './exact';
 
 const NOW = Date.UTC(2026, 10, 25, 10, 0, 0);

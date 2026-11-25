@@ -8,7 +8,7 @@
     "og": "astro build && node scripts/og.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage --coverage.include='src/lib/**/*.ts' --coverage.exclude='**/*.test.ts' --coverage.exclude='**/fake-authenticator.ts' --coverage.thresholds.lines=80 --coverage.thresholds.branches=80 --coverage.thresholds.functions=80",
-    "test:e2e": "node e2e/passkeys.e2e.mjs && node e2e/debugger.e2e.mjs && node e2e/metadata.e2e.mjs && node e2e/oauth-flow.e2e.mjs && node e2e/journey.e2e.mjs && node e2e/okta-expression.e2e.mjs && node e2e/saviynt-username.e2e.mjs && node e2e/scim-lifecycle.e2e.mjs && node e2e/opa.e2e.mjs && node e2e/am-script-migration.e2e.mjs && node e2e/am-token-scripts.e2e.mjs && node e2e/rar.e2e.mjs",
+    "test:e2e": "node e2e/passkeys.e2e.mjs && node e2e/debugger.e2e.mjs && node e2e/metadata.e2e.mjs && node e2e/oauth-flow.e2e.mjs && node e2e/journey.e2e.mjs && node e2e/okta-expression.e2e.mjs && node e2e/saviynt-username.e2e.mjs && node e2e/scim-lifecycle.e2e.mjs && node e2e/opa.e2e.mjs && node e2e/am-script-migration.e2e.mjs && node e2e/am-token-scripts.e2e.mjs && node e2e/rar.e2e.mjs && node e2e/dpop.e2e.mjs",
     "policy": "opa test src/lib/opa && opa build -t wasm -e authz/decision src/lib/opa/expenses.rego -o policy.tar.gz && tar -xzOf policy.tar.gz /policy.wasm > public/opa/expenses.wasm && rm policy.tar.gz"
   },
   "type": "module",

@@ -41,7 +41,8 @@ export async function generateKey(kid: string): Promise<KeyPair> {
 }
 
 export async function signJwt(header: Record<string, unknown>, payload: Record<string, unknown>, key: KeyPair) {
-  const input = `${base64url(JSON.stringify({ ...header, alg: 'ES256', kid: key.publicJwk.kid }))}.${base64url(JSON.stringify(payload))}`;
+  const head = header.jwk ? { ...header, alg: 'ES256' } : { ...header, alg: 'ES256', kid: key.publicJwk.kid };
+  const input = `${base64url(JSON.stringify(head))}.${base64url(JSON.stringify(payload))}`;
   const signature = await crypto.subtle.sign(SIGNATURE, key.privateKey, encoder.encode(input));
   return `${input}.${base64url(new Uint8Array(signature))}`;
 }
@@ -69,3 +70,7 @@ export async function verifyJwt(token: string, jwk: PublicJwk): Promise<boolean>
     return false;
   }
 }
+
+/** RFC 7638 thumbprint of an EC public key: the SHA-256 of its required members in lexical order. */
+export const thumbprint = ({ crv, kty, x, y }: { crv: string; kty: string; x: string; y: string }) =>
+  sha256(JSON.stringify({ crv, kty, x, y }));

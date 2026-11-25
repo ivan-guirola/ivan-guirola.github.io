@@ -1,0 +1,395 @@
+---
+import Base from '../layouts/Base.astro';
+import ProjectNav from '../components/ProjectNav.astro';
+import { routes } from '../data/nav';
+
+const t = {
+  title: 'Stolen tokens and DPoP',
+  description:
+    'Most access tokens work like cash: whoever holds one can use it. See an attacker use a copied token, and how DPoP (RFC 9449) ties the token to a key that never leaves the app.',
+  lead: 'Most access tokens work like cash: whoever holds one can use it. DPoP ties the token to a key that never leaves the app, so a copy is worth nothing. Get a token, use it, and then let an attacker try.',
+  back: 'All projects',
+  modeLabel: 'Kind of token',
+  modes: { bearer: 'Bearer, like cash', dpop: 'DPoP, tied to the app’s key' },
+  app: 'The banking app',
+  appRole: 'Laura’s app on her phone',
+  getToken: 'Sign in and get a token',
+  callApi: 'Check my accounts',
+  api: 'The bank’s API',
+  apiRole: 'Decides on every call',
+  apiWaiting: 'No calls yet.',
+  attacker: 'An attacker',
+  attackerRole: 'Copied the token from a log file',
+  attackerText: 'It also saw the last request the app sent, headers included. It does not have the app’s private key.',
+  attackerWaiting: 'Nothing to steal yet. The app has to get a token and use it first.',
+  tokenTitle: 'The access token',
+  proofTitle: 'The app’s last DPoP proof',
+  travelled: 'What travelled',
+  empty: 'Get a token to see the calls.',
+  compareTitle: 'Bearer or DPoP',
+  compare: {
+    head: ['', 'Bearer', 'DPoP'],
+    rows: [
+      ['Who can use the token', 'Anyone who has it', 'Only whoever holds the private key'],
+      ['What a stolen copy is worth', 'Everything the token allows, until it expires', 'Nothing'],
+      ['What each call carries', 'The token', 'The token and a proof signed for that call'],
+      ['What the API checks', 'The token', 'The token, the key it is tied to, and that the proof is for this call and new'],
+      ['Standard', 'RFC 6750', 'RFC 9449, accepted by FAPI 2.0'],
+    ],
+  },
+  notes: [
+    'DPoP only helps if the private key cannot be copied: in a browser it is a non-extractable Web Crypto key, on a phone it lives in the secure hardware. Malicious code running inside the app itself can still ask the key to sign.',
+    'Servers can also send a nonce (DPoP-Nonce) that the next proof must include, so proofs cannot be prepared in advance. Mutual TLS (RFC 8705) is the other way to bind a token, with a client certificate instead of a proof.',
+  ],
+  client: {
+    keyLabel: 'Its key',
+    keyBearer: 'None. A bearer token does not need one.',
+    keyDpop: 'P-256, created on the phone. The private part cannot be exported. Thumbprint:',
+    attackerKey: 'Its own, thumbprint:',
+    gotToken: { bearer: 'Laura signed in. The app has a bearer token.', dpop: 'Laura signed in. The app has a token tied to its key.' },
+    attacks: {
+      bearer: { token: 'Read Laura’s accounts with the copied token', otherEndpoint: 'Transfer 4,500 EUR with the copied token' },
+      dpop: {
+        token: 'Use the copied token on its own',
+        ownKey: 'Sign a proof with its own key',
+        replay: 'Resend the app’s last request',
+        otherEndpoint: 'Reuse the app’s proof to transfer 4,500 EUR',
+      },
+    },
+    appCall: 'The app reads Laura’s accounts',
+    verdicts: {
+      app: 'Accepted. This is the app’s own call.',
+      stolen: 'Accepted. The API cannot tell the attacker from the app: whoever has the token can use it.',
+      proof: 'Rejected. The token is tied to a key, and the attacker cannot prove it holds it.',
+      key: 'Rejected. The proof is signed with a different key from the one the token is tied to.',
+      call: 'Rejected. The proof was made for another call.',
+      unique: 'Rejected. That proof has already been used.',
+      other: 'Rejected.',
+    },
+    fields: {
+      signature: 'Token signed by the bank',
+      expiry: 'Token not expired',
+      scheme: 'Authorization scheme',
+      proof: 'DPoP proof sent',
+      proofSignature: 'Proof signature',
+      key: 'Key the token is tied to (cnf.jkt)',
+      method: 'Method (htm)',
+      url: 'Address (htu)',
+      tokenHash: 'Token hash (ath)',
+      fresh: 'Fresh (iat)',
+      unique: 'Not used before (jti)',
+    },
+    checkHead: ['', 'Expected', 'In the call'],
+    who: { app: 'The app', attacker: 'The attacker' },
+    steps: {
+      token: {
+        bearer: 'swaps the sign-in code for a token.',
+        dpop: 'swaps the sign-in code for a token, with a proof signed by its key. The bank writes the thumbprint of that key into the token.',
+      },
+      api: { bearer: 'calls the API with the token.', dpop: 'calls the API with the token and a proof.' },
+    },
+    tokenNote: {
+      bearer: 'Nothing in it says who may use it.',
+      dpop: 'cnf.jkt is the SHA-256 thumbprint of the app’s public key. Only proofs signed with the matching private key are accepted with this token.',
+    },
+    proofNote:
+      'A small JWT the app signs for every call. Its header carries the public key; the content says which call it is for (htm, htu), when it was made (iat), a unique id (jti) and the hash of the token (ath).',
+    noProof: 'A bearer token is sent without a proof.',
+    header: 'Header',
+    content: 'Content',
+    request: 'Request',
+    response: 'Response',
+    statuses: { 200: 'OK', 201: 'Created', 401: 'Unauthorized' },
+  },
+};
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <p><a href={routes.projects}>{t.back}</a></p>
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+  </header>
+
+  <div class="rx dp">
+    <div class="rx-controls">
+      <div>
+        <p class="sc-label" id="dp-mode">{t.modeLabel}</p>
+        <div class="filter" role="group" aria-labelledby="dp-mode">
+          <button type="button" data-mode="bearer" aria-pressed="false">{t.modes.bearer}</button>
+          <button type="button" data-mode="dpop" aria-pressed="true">{t.modes.dpop}</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="rx-places">
+      <section class="rx-place" data-dp="app-place">
+        <header>
+          <h2>{t.app}</h2>
+          <p>{t.appRole}</p>
+        </header>
+        <dl class="dp-key" data-dp="app-key"></dl>
+        <div class="rx-actions">
+          <button class="btn" type="button" data-dp="get-token">{t.getToken}</button>
+          <button class="btn quiet" type="button" data-dp="call-api" disabled>{t.callApi}</button>
+        </div>
+        <p class="rx-status" data-dp="app-status" role="status"></p>
+      </section>
+
+      <section class="rx-place" data-dp="api-place">
+        <header>
+          <h2>{t.api}</h2>
+          <p>{t.apiRole}</p>
+        </header>
+        <p class="rx-empty" data-dp="api-empty">{t.apiWaiting}</p>
+        <div class="rx-result" data-dp="result" aria-live="polite" hidden></div>
+      </section>
+
+      <section class="rx-place" data-dp="attacker-place">
+        <header>
+          <h2>{t.attacker}</h2>
+          <p>{t.attackerRole}</p>
+        </header>
+        <p>{t.attackerText}</p>
+        <dl class="dp-key" data-dp="attacker-key"></dl>
+        <p class="rx-empty" data-dp="attacker-empty">{t.attackerWaiting}</p>
+        <div class="rx-tries" data-dp="attacks" hidden></div>
+      </section>
+    </div>
+
+    <section class="rx-wire">
+      <h2>{t.tokenTitle}</h2>
+      <div data-dp="token"><p class="fine">{t.empty}</p></div>
+      <h2>{t.proofTitle}</h2>
+      <div data-dp="proof"><p class="fine">{t.empty}</p></div>
+      <h2>{t.travelled}</h2>
+      <ol class="sc-calls" data-dp="calls"></ol>
+      <p class="fine" data-dp="calls-empty">{t.empty}</p>
+    </section>
+
+    <h2>{t.compareTitle}</h2>
+    <div class="ra-table">
+      <table>
+        <thead>
+          <tr>{t.compare.head.map((cell) => <th scope="col">{cell}</th>)}</tr>
+        </thead>
+        <tbody>
+          {
+            t.compare.rows.map(([label, ...cells]) => (
+              <tr>
+                <th scope="row">{label}</th>
+                {cells.map((cell) => (
+                  <td>{cell}</td>
+                ))}
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+    {t.notes.map((note) => <p class="fine rx-note">{note}</p>)}
+  </div>
+
+  <script type="application/json" id="dp-text" set:html={JSON.stringify({ ...t.client, empty: t.empty })} />
+  <ProjectNav current="dpop-stolen-tokens" demos />
+</Base>
+
+<script>
+  import { decodeJwt } from '../lib/jose';
+  import {
+    ATTACKS,
+    requestText,
+    responseText,
+    startDpop,
+    type Attack,
+    type Attempt,
+    type DpopSession,
+    type Exchange,
+    type Mode,
+  } from '../lib/dpop/dpop';
+
+  const text = JSON.parse(document.getElementById('dp-text')!.textContent!);
+  const el = (name: string) => document.querySelector<HTMLElement>(`[data-dp="${name}"]`)!;
+  const make = <K extends keyof HTMLElementTagNameMap>(tag: K, content?: string, className?: string) => {
+    const node = document.createElement(tag);
+    if (content !== undefined) node.textContent = content;
+    if (className) node.className = className;
+    return node;
+  };
+  const modeButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-mode]')];
+  const callButton = el('call-api') as HTMLButtonElement;
+  let mode: Mode = 'dpop';
+  let session: DpopSession | undefined;
+
+  function focus(place: 'app' | 'api' | 'attacker') {
+    for (const name of ['app', 'api', 'attacker']) el(`${name}-place`).toggleAttribute('data-active', name === place);
+  }
+
+  function keyList(list: HTMLElement, label: string, thumbprint?: string) {
+    const description = make('dd', label);
+    if (thumbprint) description.append(' ', make('code', thumbprint));
+    list.replaceChildren(make('dt', text.keyLabel), description);
+  }
+
+  async function reset() {
+    session = await startDpop(mode);
+    for (const button of modeButtons) button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
+    keyList(el('app-key'), mode === 'dpop' ? text.keyDpop : text.keyBearer, mode === 'dpop' ? session.appThumbprint : undefined);
+    keyList(el('attacker-key'), text.attackerKey, session.attackerThumbprint);
+    el('attacker-key').hidden = mode === 'bearer';
+    callButton.disabled = true;
+    el('app-status').textContent = '';
+    el('api-empty').hidden = false;
+    el('result').hidden = true;
+    el('attacker-empty').hidden = false;
+    el('attacks').hidden = true;
+    el('token').replaceChildren(make('p', text.empty, 'fine'));
+    el('proof').replaceChildren(make('p', text.empty, 'fine'));
+    renderCalls();
+    focus('app');
+  }
+
+  function jwtBlock(token: string, note: string) {
+    const { header, payload } = decodeJwt(token);
+    const raw = make('pre', undefined, 'rx-jwt');
+    token.split('.').forEach((part, index) => {
+      if (index) raw.append('.');
+      raw.append(make('span', part, `rx-${['header', 'payload', 'signature'][index]}`));
+    });
+    const grid = make('div', undefined, 'rx-decoded');
+    for (const [title, value, kind] of [
+      [text.header, header, 'header'],
+      [text.content, payload, 'payload'],
+    ] as const) {
+      const node = make('div');
+      node.append(make('h3', title, `rx-${kind}`), make('pre', JSON.stringify(value, null, 2)));
+      grid.append(node);
+    }
+    return [make('p', note, 'fine'), raw, grid];
+  }
+
+  function renderToken() {
+    if (!session?.token) return;
+    el('token').replaceChildren(...jwtBlock(session.token, text.tokenNote[mode]));
+    const proof = session.lastProof ?? session.calls.find((call) => call.step === 'token')?.headers.DPoP;
+    el('proof').replaceChildren(...(proof ? jwtBlock(proof, text.proofNote) : [make('p', text.noProof, 'fine')]));
+  }
+
+  function callItem(call: Exchange) {
+    const item = make('li', undefined, 'sc-call');
+    item.dataset.method = call.method;
+    item.dataset.who = call.who;
+    const url = new URL(call.url);
+    const line = make('p', undefined, 'sc-line');
+    line.append(
+      make('span', call.method, 'sc-method'),
+      make('code', `${url.host}${url.pathname}`, 'sc-path'),
+      make('span', `${call.status} ${text.statuses[call.status] ?? ''}`.trim(), 'sc-status'),
+    );
+    const details = make('details', undefined, 'tech');
+    details.append(
+      make('summary', `${text.request} / ${text.response}`),
+      make('h3', text.request),
+      make('pre', requestText(call)),
+      make('h3', text.response),
+      make('pre', responseText(call)),
+    );
+    const step = call.who === 'app' ? `${text.who.app} ${text.steps[call.step][mode]}` : `${text.who.attacker}: ${text.attacks[mode][call.attack!].toLowerCase()}.`;
+    item.append(line, make('p', step, 'sc-step'), details);
+    return item;
+  }
+
+  function renderCalls() {
+    el('calls').replaceChildren(...(session?.calls ?? []).map(callItem));
+    el('calls-empty').hidden = !!session?.calls.length;
+  }
+
+  function verdict(attempt: Attempt) {
+    if (attempt.accepted) return attempt.who === 'app' ? text.verdicts.app : text.verdicts.stolen;
+    const failed = new Set(attempt.checks.filter((check) => !check.ok).map((check) => check.field));
+    if (failed.has('scheme') || failed.has('proof')) return text.verdicts.proof;
+    if (failed.has('key')) return text.verdicts.key;
+    if (failed.has('method') || failed.has('url')) return text.verdicts.call;
+    if (failed.has('unique')) return text.verdicts.unique;
+    return text.verdicts.other;
+  }
+
+  function renderResult(attempt: Attempt, label: string) {
+    const message = make('p', verdict(attempt), 'rx-verdict');
+    message.dataset.accepted = String(attempt.accepted);
+    message.dataset.mode = attempt.accepted && attempt.who === 'attacker' ? 'scope' : 'rar';
+
+    const table = make('table', undefined, 'rx-checks');
+    const head = make('tr');
+    for (const cell of text.checkHead) head.append(make('th', cell));
+    table.append(head);
+    for (const check of attempt.checks) {
+      const row = make('tr');
+      row.dataset.ok = String(check.ok);
+      const name = make('th', text.fields[check.field]);
+      name.scope = 'row';
+      const expected = make('td', check.expected.replace(/https:\/\//g, ''));
+      expected.dataset.label = text.checkHead[1];
+      const actual = make('td', check.actual.replace(/https:\/\//g, ''));
+      actual.dataset.label = text.checkHead[2];
+      row.append(name, expected, actual);
+      table.append(row);
+    }
+    const wrap = make('div', undefined, 'rx-table');
+    wrap.append(table);
+    el('result').replaceChildren(make('p', label, 'rx-tried'), message, wrap);
+    el('result').hidden = false;
+    el('api-empty').hidden = true;
+  }
+
+  function renderAttacks() {
+    el('attacker-empty').hidden = true;
+    el('attacks').hidden = false;
+    el('attacks').replaceChildren(
+      ...ATTACKS[mode].map((attack: Attack) => {
+        const button = make('button', text.attacks[mode][attack], 'rx-try');
+        button.type = 'button';
+        button.dataset.attack = attack;
+        button.addEventListener('click', async () => {
+          if (!session) return;
+          const attempt = await session.steal(attack);
+          for (const other of el('attacks').querySelectorAll('button')) other.removeAttribute('data-picked');
+          button.dataset.picked = attempt.accepted ? 'warn' : 'true';
+          renderResult(attempt, text.attacks[mode][attack]);
+          renderCalls();
+          focus('api');
+        });
+        return button;
+      }),
+    );
+  }
+
+  el('get-token').addEventListener('click', async () => {
+    await reset();
+    await session!.getToken();
+    el('app-status').textContent = text.gotToken[mode];
+    el('app-status').dataset.state = 'ok';
+    callButton.disabled = false;
+    renderToken();
+    renderCalls();
+  });
+
+  callButton.addEventListener('click', async () => {
+    if (!session?.token) return;
+    const attempt = await session.callApi();
+    renderResult(attempt, text.appCall);
+    renderToken();
+    renderCalls();
+    renderAttacks();
+    focus('api');
+  });
+
+  for (const button of modeButtons) {
+    button.addEventListener('click', () => {
+      mode = button.dataset.mode as Mode;
+      void reset();
+    });
+  }
+
+  void reset();
+</script>

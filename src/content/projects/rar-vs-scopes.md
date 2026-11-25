@@ -1,7 +1,7 @@
 ---
 title: Scopes vs RAR for payments
 summary: Compare how an app asks a bank for permission to pay, with an OAuth scope, the PSD2 Berlin Group approach and rich authorization requests under FAPI 2.0.
-category: tools
+category: oauth
 tags: [OAuth 2.0, RAR, FAPI 2.0, PSD2, Open banking, TypeScript]
 date: 2026-11-20
 demo: https://ivan-guirola.github.io/tools/rar-vs-scopes/

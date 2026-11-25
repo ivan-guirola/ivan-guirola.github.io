@@ -3374,3 +3374,57 @@ h3.rx-payload {
 .rx-try[data-picked='warn'] {
   border-color: var(--warn);
 }
+
+/* Stolen tokens and DPoP */
+.dp-key {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  font-size: 0.9rem;
+}
+.dp-key dt {
+  color: var(--muted);
+}
+.dp-key dd {
+  margin: 0;
+}
+.dp-key code {
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+  color: var(--accent-2);
+}
+.dp-key[hidden] {
+  display: none;
+}
+.dp .sc-call[data-who='attacker'] .sc-step {
+  color: var(--danger);
+}
+@media (min-width: 60rem) {
+  .dp .rx-places {
+    grid-template-columns: 0.85fr 1.35fr 0.95fr;
+  }
+}
+.dp .rx-checks tr:first-child {
+  display: none;
+}
+.dp .rx-checks tr {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.dp .rx-checks th,
+.dp .rx-checks td {
+  border: 0;
+  padding: 0.15rem 0.3rem;
+}
+.dp .rx-checks tr:not(:first-child) th {
+  grid-column: 1 / -1;
+  white-space: normal;
+}
+.dp .rx-checks td::before {
+  content: attr(data-label);
+  display: block;
+  color: var(--muted);
+  font: 0.75rem var(--sans);
+}

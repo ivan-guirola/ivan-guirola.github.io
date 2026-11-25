@@ -1,7 +1,7 @@
 ---
 title: OAuth flow picker
 summary: Answer a few questions about the application you want to connect and see which OAuth flow fits it and how to set it up.
-category: tools
+category: oauth
 tags: [OAuth 2.0, OIDC, PKCE, TypeScript]
 date: 2026-11-17
 demo: https://ivan-guirola.github.io/tools/oauth-flow/

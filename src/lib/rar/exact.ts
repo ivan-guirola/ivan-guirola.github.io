@@ -1,4 +1,4 @@
-import { decodeJwt, generateKey, randomId, sha256, signJwt, verifyJwt, type Jwt, type PublicJwk } from './jose';
+import { decodeJwt, generateKey, randomId, sha256, signJwt, verifyJwt, type Jwt, type PublicJwk } from '../jose';
 
 export type Mode = 'scope' | 'rar';
 export type CaseId = 'payment' | 'agent';
