@@ -1,0 +1,539 @@
+---
+import Base from '../layouts/Base.astro';
+import ProjectNav from '../components/ProjectNav.astro';
+import { routes } from '../data/nav';
+import { DEFAULT_INPUT, DESTINATIONS } from '../lib/rar/exact';
+
+const t = {
+  title: 'Exact permissions with RAR',
+  description:
+    'An app asks for permission to pay 45 EUR, and an AI agent asks to book one flight. Compare a plain OAuth scope with rich authorization requests (RFC 9396) and see what the token allows.',
+  lead: 'An app asks your bank for permission. With a scope, all it can say is “payments”. With a rich authorization request it says exactly what it wants: this amount, to this payee, once. Try both and then try to use the permission for something else.',
+  back: 'All projects',
+  caseLabel: 'What happens',
+  cases: { payment: 'A shop asks to be paid', agent: 'An AI agent books a flight' },
+  modeLabel: 'How the app asks',
+  modes: { scope: 'With a scope', rar: 'With a rich authorization request' },
+  app: { payment: 'Example Store', agent: 'Travel assistant' },
+  appRole: { payment: 'An online shop', agent: 'An AI agent acting for Laura' },
+  appText: {
+    payment: 'Laura is paying for her order. The shop needs her bank to allow the payment.',
+    agent: 'Laura tells her assistant: “Book me a flight from Madrid this Friday, economy, for less than this.”',
+  },
+  amount: 'Amount (EUR)',
+  destination: 'To',
+  maxPrice: 'At most (EUR)',
+  destinations: Object.fromEntries(Object.entries(DESTINATIONS).map(([code, d]) => [code, d.city])),
+  ask: 'Ask for permission',
+  server: { payment: 'Your bank', agent: 'Your Skyway account' },
+  serverRole: 'Where Laura signs in and decides',
+  waiting: 'Nothing to approve yet.',
+  api: { payment: 'The bank’s payments API', agent: 'Skyway’s booking API' },
+  apiRole: 'Checks every call against the token',
+  apiWaiting: 'The app has no token yet.',
+  tryLabel: 'What the app tries',
+  travelled: 'What travelled',
+  travelledEmpty: 'Ask for permission to see the calls.',
+  tokenTitle: 'The access token',
+  compareTitle: 'Scope or rich authorization request',
+  compare: {
+    head: ['', 'Scope', 'Rich authorization request'],
+    rows: [
+      ['What the app asks for', 'A word, such as “payments”', 'A JSON object: what, how much, to whom, where'],
+      ['What the person sees', 'A general permission', 'The exact operation'],
+      ['What the token carries', 'The scope', 'The same object, as authorization_details'],
+      ['What the API can check', 'That the scope is there', 'Every field of the call against the token'],
+      ['Standard', 'OAuth 2.0 (RFC 6749)', 'RFC 9396, recommended by FAPI 2.0'],
+    ],
+  },
+  notes: [
+    'The flow is the one FAPI 2.0 asks for: the request is pushed straight to the server (PAR) so it never travels in the browser address, the code is protected with PKCE and the app signs in with its own key (private_key_jwt). FAPI 2.0 also ties the token to the app’s key with DPoP or mutual TLS; it is left out here to keep the focus on what the token allows.',
+    'RFC 9396 defines how to carry authorization_details, not what goes inside. payment_initiation is the example in the RFC; flight_booking is made up for this page. Each server publishes the types it accepts.',
+    'Using a permission only once is a rule of the API, not of the RFC. It is how payment consents work in open banking.',
+  ],
+  client: {
+    steps: {
+      par: 'The app sends what it wants straight to the server, signed with its own key. The server answers with a reference that expires in a minute.',
+      authorize: 'Laura’s browser goes to the server carrying only that reference. She signs in and sees what the app asks for.',
+      callback: 'Laura approves. The server sends her back to the app with a one-time code, and its own name (iss) so the app knows where it comes from.',
+      token: 'The app swaps the code for a token, proving with PKCE that it started the request and signing in with its key.',
+      api: 'The app calls the API with the token.',
+    },
+    consent: {
+      scopeHeading: '{app} wants to',
+      scope: { payment: 'Make payments from your accounts', agent: 'Make bookings in your name' },
+      payment: '{app} asks you to approve this payment',
+      agent: '{app}, an AI agent, asks to book this for you',
+      amount: 'Amount',
+      to: 'To',
+      reference: 'Reference',
+      flight: 'Flight',
+      cabin: 'Class',
+      passengers: 'Passengers',
+      departBy: 'Leaving by',
+      maxPrice: 'Up to',
+      times: 'How many times',
+      once: 'Once',
+      approve: 'Approve',
+      decline: 'Decline',
+    },
+    approved: 'Laura approved. The app has a token.',
+    declined: 'Laura declined. The app has no token and can do nothing.',
+    attempts: {
+      payment: {
+        agreed: 'Pay {amount} EUR to Example Store',
+        amount: 'Pay {amount10} EUR to Example Store',
+        payee: 'Pay 4,500.00 EUR to Unknown Ltd',
+        again: 'Pay {amount} EUR to Example Store again',
+      },
+      agent: {
+        agreed: 'Book Madrid to {city}, economy, {fare} EUR',
+        business: 'Book it in business class, 1,240.00 EUR',
+        elsewhere: 'Book Madrid to New York instead, 640.00 EUR',
+        hotel: 'Also book a hotel in {city}, 420.00 EUR',
+        again: 'Book the same flight again',
+      },
+    },
+    fields: {
+      signature: 'Signed by the server',
+      expiry: 'Not expired',
+      audience: 'Meant for this API',
+      scope: 'Scope',
+      location: 'Where',
+      action: 'What',
+      amount: 'Amount',
+      currency: 'Currency',
+      payee: 'Payee account',
+      payeeName: 'Payee name',
+      origin: 'From',
+      destination: 'To',
+      cabin: 'Class',
+      price: 'Price',
+      departure: 'Departure',
+      once: 'Not used before',
+    },
+    checkHead: ['', 'In the token', 'In the call'],
+    reasons: {
+      signature: 'the signature',
+      expiry: 'the time',
+      audience: 'the API it is meant for',
+      scope: 'the scope',
+      location: 'the address it called',
+      action: 'the action',
+      amount: 'the amount',
+      currency: 'the currency',
+      payee: 'the payee account',
+      payeeName: 'the payee name',
+      origin: 'the departure airport',
+      destination: 'the destination',
+      cabin: 'the class',
+      price: 'the price',
+      departure: 'the date',
+    },
+    outcome: {
+      scope: 'Accepted. The token only says “{scope}”, so the API cannot tell whether Laura agreed to this.',
+      rar: 'Accepted. It matches what Laura approved.',
+      rejected: 'Rejected: {field} does not match what Laura approved.',
+      used: 'Rejected: the permission was for one operation and it has been used.',
+    },
+    tokenNote:
+      'A JWT signed by the server with ES256. The API checks the signature with the server’s public key (kid {kid}) and then reads what is allowed from the content.',
+    request: 'Request',
+    response: 'Response',
+    header: 'Header',
+    content: 'Content',
+    statuses: { 200: 'OK', 201: 'Created', 403: 'Forbidden' },
+  },
+};
+---
+
+<Base page="projects" title={t.title} description={t.description}>
+  <header class="page-head">
+    <p><a href={routes.projects}>{t.back}</a></p>
+    <h1>{t.title}</h1>
+    <p>{t.lead}</p>
+  </header>
+
+  <div class="rx">
+    <div class="rx-controls">
+      <div>
+        <p class="sc-label" id="rx-case">{t.caseLabel}</p>
+        <div class="filter" role="group" aria-labelledby="rx-case">
+          <button type="button" data-case="payment" aria-pressed="true">{t.cases.payment}</button>
+          <button type="button" data-case="agent" aria-pressed="false">{t.cases.agent}</button>
+        </div>
+      </div>
+      <div>
+        <p class="sc-label" id="rx-mode">{t.modeLabel}</p>
+        <div class="filter" role="group" aria-labelledby="rx-mode">
+          <button type="button" data-mode="scope" aria-pressed="false">{t.modes.scope}</button>
+          <button type="button" data-mode="rar" aria-pressed="true">{t.modes.rar}</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="rx-places">
+      <section class="rx-place" data-rx="app-place">
+        <header>
+          <h2 data-rx="app-name">{t.app.payment}</h2>
+          <p data-rx="app-role">{t.appRole.payment}</p>
+        </header>
+        <p data-rx="app-text">{t.appText.payment}</p>
+        <form data-rx="form">
+          <label data-for="payment">{t.amount}<input name="amount" inputmode="decimal" value={DEFAULT_INPUT.amount} /></label>
+          <label data-for="agent" hidden
+            >{t.destination}
+            <select name="destination">
+              {Object.entries(t.destinations).map(([code, city]) => <option value={code}>{city}</option>)}
+            </select>
+          </label>
+          <label data-for="agent" hidden>{t.maxPrice}<input name="maxPrice" inputmode="decimal" value={DEFAULT_INPUT.maxPrice} /></label>
+          <button class="btn" type="submit">{t.ask}</button>
+        </form>
+      </section>
+
+      <section class="rx-place" data-rx="server-place">
+        <header>
+          <h2 data-rx="server-name">{t.server.payment}</h2>
+          <p>{t.serverRole}</p>
+        </header>
+        <p class="rx-empty" data-rx="server-empty">{t.waiting}</p>
+        <div class="rx-consent" data-rx="consent" hidden></div>
+        <p class="rx-status" data-rx="server-status" role="status"></p>
+      </section>
+
+      <section class="rx-place" data-rx="api-place">
+        <header>
+          <h2 data-rx="api-name">{t.api.payment}</h2>
+          <p>{t.apiRole}</p>
+        </header>
+        <p class="rx-empty" data-rx="api-empty">{t.apiWaiting}</p>
+        <div data-rx="tries" hidden>
+          <p class="sc-label">{t.tryLabel}</p>
+          <div class="rx-tries" data-rx="try-buttons"></div>
+        </div>
+        <div class="rx-result" data-rx="result" aria-live="polite" hidden></div>
+      </section>
+    </div>
+
+    <section class="rx-wire">
+      <h2>{t.tokenTitle}</h2>
+      <div data-rx="token"><p class="fine">{t.travelledEmpty}</p></div>
+      <h2>{t.travelled}</h2>
+      <ol class="sc-calls" data-rx="calls"></ol>
+      <p class="fine" data-rx="calls-empty">{t.travelledEmpty}</p>
+    </section>
+
+    <h2>{t.compareTitle}</h2>
+    <div class="ra-table">
+      <table>
+        <thead>
+          <tr>{t.compare.head.map((cell) => <th scope="col">{cell}</th>)}</tr>
+        </thead>
+        <tbody>
+          {
+            t.compare.rows.map(([label, ...cells]) => (
+              <tr>
+                <th scope="row">{label}</th>
+                {cells.map((cell) => (
+                  <td>{cell}</td>
+                ))}
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+    {t.notes.map((note) => <p class="fine rx-note">{note}</p>)}
+  </div>
+
+  <script
+    type="application/json"
+    id="rx-text"
+    set:html={JSON.stringify({ ...t.client, app: t.app, appRole: t.appRole, appText: t.appText, server: t.server, api: t.api, destinations: t.destinations, travelledEmpty: t.travelledEmpty })}
+  />
+  <ProjectNav current="rar-exact-permissions" demos />
+</Base>
+
+<script>
+  import { decodeJwt } from '../lib/rar/jose';
+  import {
+    ATTEMPTS,
+    DESTINATIONS,
+    requestText,
+    responseText,
+    startSession,
+    type Attempt,
+    type CaseId,
+    type Exchange,
+    type Input,
+    type Mode,
+    type Session,
+  } from '../lib/rar/exact';
+
+  const text = JSON.parse(document.getElementById('rx-text')!.textContent!);
+  const el = (name: string) => document.querySelector<HTMLElement>(`[data-rx="${name}"]`)!;
+  const make = <K extends keyof HTMLElementTagNameMap>(tag: K, content?: string, className?: string) => {
+    const node = document.createElement(tag);
+    if (content !== undefined) node.textContent = content;
+    if (className) node.className = className;
+    return node;
+  };
+  const fill = (template: string, values: Record<string, string>) => template.replace(/\{(\w+)\}/g, (_, key) => values[key] ?? '');
+  const euros = (value: string) => Number(value).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const longDate = (value: string) =>
+    new Date(`${value}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+  const iban = (value: string) => value.replace(/(.{4})/g, '$1 ').trim();
+
+  const form = el('form') as HTMLFormElement;
+  const caseButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-case]')];
+  const modeButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-mode]')];
+  let caseId: CaseId = 'payment';
+  let mode: Mode = 'rar';
+  let session: Session | undefined;
+  let input: Input;
+
+  function readInput(): Input {
+    const data = new FormData(form);
+    const number = (name: string, fallback: string) => {
+      const value = Number(String(data.get(name)).replace(',', '.'));
+      return Number.isFinite(value) && value > 0 ? value.toFixed(2) : fallback;
+    };
+    return {
+      amount: number('amount', '45.00'),
+      destination: String(data.get('destination')) as Input['destination'],
+      maxPrice: number('maxPrice', '300.00'),
+    };
+  }
+
+  function focus(place: 'app' | 'server' | 'api') {
+    for (const name of ['app', 'server', 'api']) el(`${name}-place`).toggleAttribute('data-active', name === place);
+  }
+
+  function reset() {
+    session = undefined;
+    el('app-name').textContent = text.app[caseId];
+    el('app-role').textContent = text.appRole[caseId];
+    el('app-text').textContent = text.appText[caseId];
+    el('server-name').textContent = text.server[caseId];
+    el('api-name').textContent = text.api[caseId];
+    for (const label of form.querySelectorAll<HTMLElement>('[data-for]')) label.hidden = label.dataset.for !== caseId;
+    el('server-empty').hidden = false;
+    el('consent').hidden = true;
+    el('server-status').textContent = '';
+    el('api-empty').hidden = false;
+    el('tries').hidden = true;
+    el('result').hidden = true;
+    el('calls').replaceChildren();
+    el('calls-empty').hidden = false;
+    el('token').replaceChildren(make('p', text.travelledEmpty, 'fine'));
+    for (const button of caseButtons) button.setAttribute('aria-pressed', String(button.dataset.case === caseId));
+    for (const button of modeButtons) button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
+    focus('app');
+  }
+
+  function callItem(call: Exchange) {
+    const item = make('li', undefined, 'sc-call');
+    item.dataset.method = call.method;
+    const url = new URL(call.url);
+    const line = make('p', undefined, 'sc-line');
+    line.append(
+      make('span', call.method, 'sc-method'),
+      make('code', `${url.host}${url.pathname}`, 'sc-path'),
+      make('span', `${call.status} ${text.statuses[call.status] ?? ''}`.trim(), 'sc-status'),
+    );
+    const details = make('details', undefined, 'tech');
+    details.append(make('summary', `${text.request} / ${text.response}`), make('h3', text.request), make('pre', requestText(call)));
+    if (call.response) details.append(make('h3', text.response), make('pre', responseText(call)));
+    item.append(line, make('p', text.steps[call.step], 'sc-step'), details);
+    return item;
+  }
+
+  function renderCalls() {
+    el('calls').replaceChildren(...(session?.calls ?? []).map(callItem));
+    el('calls-empty').hidden = !!session?.calls.length;
+  }
+
+  function consentLines(): [string, string][] {
+    const c = text.consent;
+    const detail = session!.details![0];
+    if (caseId === 'payment') {
+      return [
+        [c.amount, `${euros(detail.instructedAmount.amount)} ${detail.instructedAmount.currency}`],
+        [c.to, `${detail.creditorName}, ${iban(detail.creditorAccount.iban)}`],
+        [c.reference, detail.remittanceInformationUnstructured],
+        [c.times, c.once],
+      ];
+    }
+    return [
+      [c.flight, `Madrid to ${text.destinations[detail.destination]}`],
+      [c.cabin, 'Economy'],
+      [c.passengers, String(detail.passengers)],
+      [c.departBy, longDate(detail.departBy)],
+      [c.maxPrice, `${euros(detail.maxPrice.amount)} ${detail.maxPrice.currency}`],
+      [c.times, c.once],
+    ];
+  }
+
+  function renderConsent() {
+    const c = text.consent;
+    const app = text.app[caseId];
+    const heading = mode === 'scope' ? fill(c.scopeHeading, { app }) : fill(c[caseId], { app });
+    let body: HTMLElement;
+    if (mode === 'scope') body = make('p', c.scope[caseId], 'rx-scope');
+    else {
+      body = make('dl');
+      for (const [term, value] of consentLines()) body.append(make('dt', term), make('dd', value));
+    }
+    const actions = make('div', undefined, 'rx-actions');
+    const approve = make('button', c.approve, 'btn');
+    approve.type = 'button';
+    approve.dataset.rx = 'approve';
+    approve.addEventListener('click', onApprove);
+    const decline = make('button', c.decline, 'btn quiet');
+    decline.type = 'button';
+    decline.dataset.rx = 'decline';
+    decline.addEventListener('click', onDecline);
+    actions.append(approve, decline);
+    el('consent').replaceChildren(make('p', heading, 'rx-heading'), body, actions);
+    el('consent').hidden = false;
+    el('server-empty').hidden = true;
+  }
+
+  function attemptLabel(id: string) {
+    const destination = DESTINATIONS[input.destination];
+    return fill(text.attempts[caseId][id], {
+      amount: euros(input.amount),
+      amount10: euros(String(Number(input.amount) * 10)),
+      city: destination.city,
+      fare: euros(destination.fare),
+    });
+  }
+
+  function renderTries() {
+    el('api-empty').hidden = true;
+    el('tries').hidden = false;
+    el('try-buttons').replaceChildren(
+      ...ATTEMPTS[caseId].map((id) => {
+        const button = make('button', attemptLabel(id), 'rx-try');
+        button.type = 'button';
+        button.dataset.attempt = id;
+        button.addEventListener('click', () => onAttempt(id, button));
+        return button;
+      }),
+    );
+  }
+
+  function renderToken() {
+    const token = session?.token;
+    if (!token) return;
+    const { header, payload } = decodeJwt(token);
+    const raw = make('pre', undefined, 'rx-jwt');
+    token.split('.').forEach((part, index) => {
+      if (index) raw.append('.');
+      raw.append(make('span', part, `rx-${['header', 'payload', 'signature'][index]}`));
+    });
+    const grid = make('div', undefined, 'rx-decoded');
+    for (const [title, value, kind] of [
+      [text.header, header, 'header'],
+      [text.content, payload, 'payload'],
+    ] as const) {
+      const node = make('div');
+      node.append(make('h3', title, `rx-${kind}`), make('pre', JSON.stringify(value, null, 2)));
+      grid.append(node);
+    }
+    el('token').replaceChildren(make('p', fill(text.tokenNote, { kid: header.kid }), 'fine'), raw, grid);
+  }
+
+  function renderResult(attempt: Attempt) {
+    const failed = attempt.checks.find((check) => !check.ok);
+    let message: string;
+    if (attempt.accepted) message = fill(text.outcome[mode], { scope: session!.scope ?? '' });
+    else if (failed?.field === 'once') message = text.outcome.used;
+    else message = fill(text.outcome.rejected, { field: text.reasons[failed!.field] });
+
+    const verdict = make('p', message, 'rx-verdict');
+    verdict.dataset.accepted = String(attempt.accepted);
+    verdict.dataset.mode = mode;
+
+    const table = make('table', undefined, 'rx-checks');
+    const head = make('tr');
+    for (const cell of text.checkHead) head.append(make('th', cell));
+    table.append(head);
+    for (const check of attempt.checks) {
+      const row = make('tr');
+      row.dataset.ok = String(check.ok);
+      const name = make('th', text.fields[check.field]);
+      name.scope = 'row';
+      const shown = (value: string) => value.replace(/https:\/\//g, '');
+      const allowed = make('td', shown(check.allowed));
+      allowed.dataset.label = text.checkHead[1];
+      const requested = make('td', shown(check.requested));
+      requested.dataset.label = text.checkHead[2];
+      row.append(name, allowed, requested);
+      table.append(row);
+    }
+    const wrap = make('div', undefined, 'rx-table');
+    wrap.append(table);
+    el('result').replaceChildren(make('p', attemptLabel(attempt.id), 'rx-tried'), verdict, wrap);
+    el('result').hidden = false;
+  }
+
+  async function onAttempt(id: string, button: HTMLButtonElement) {
+    if (!session?.token) return;
+    const attempt = await session.attempt(id);
+    for (const other of el('try-buttons').querySelectorAll('button')) other.removeAttribute('data-picked');
+    button.dataset.picked = !attempt.accepted ? 'false' : mode === 'rar' || id === 'agreed' ? 'true' : 'warn';
+    renderResult(attempt);
+    renderCalls();
+    focus('api');
+  }
+
+  async function onApprove() {
+    if (!session) return;
+    await session.approve();
+    el('consent').hidden = true;
+    el('server-status').textContent = text.approved;
+    el('server-status').dataset.state = 'ok';
+    renderTries();
+    renderToken();
+    renderCalls();
+    focus('api');
+  }
+
+  function onDecline() {
+    el('consent').hidden = true;
+    el('server-status').textContent = text.declined;
+    el('server-status').dataset.state = 'error';
+    focus('app');
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    input = readInput();
+    const pending = await startSession(caseId, mode, input);
+    reset();
+    session = pending;
+    renderConsent();
+    renderCalls();
+    focus('server');
+  });
+
+  for (const button of caseButtons) {
+    button.addEventListener('click', () => {
+      caseId = button.dataset.case as CaseId;
+      reset();
+    });
+  }
+  for (const button of modeButtons) {
+    button.addEventListener('click', () => {
+      mode = button.dataset.mode as Mode;
+      reset();
+    });
+  }
+  form.addEventListener('input', () => {
+    if (session) reset();
+  });
+
+  reset();
+</script>
